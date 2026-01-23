@@ -2,7 +2,7 @@
 
 /// Router предоставя удобен начин да пренасочване на заявките към съответните им handler-и. 
 /// Идеята е вместо да правим заявка fetch(SVG-ANIMATOR/backend/routes/register.php)
-/// да пишем fetch(backend/register)
+/// да пишем fetch(backend/api/register)
 /// Router получава $routesDir и $basePath, като след това за всяка заявка прави следното:
 /// маха basePath и конкатенира $routesDir с осталата част от url-a и добавя .php накрая. 
 /// Когато добавим файл в routes или дори папка с файлове, то можем после автоматично да правим 
