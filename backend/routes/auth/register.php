@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . "/../app/Repositories/UserRepositories.php";
-require_once __DIR__ . "/../app/Helpers/Validator.php";
-require_once __DIR__ . "/../app/Helpers/Auth.php";
+require_once __DIR__ . "/../../app/Repositories/UserRepositories.php";
+require_once __DIR__ . "/../../app/Helpers/Validator.php";
+require_once __DIR__ . "/../../app/Helpers/Auth.php";
 
 $data = Request::json();
 
