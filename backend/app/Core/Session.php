@@ -1,8 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/// Session е клас който се грижи за сесиите от логването на user-a до logout-ването му
-
+/// Session е клас който се грижи за сесиите от логването на user-a до logout-ването му 
 class Session
 {
     public static function start(): void
@@ -37,15 +36,6 @@ class Session
     {
         self::start();
         return $_SESSION["user"] ?? null;
-    }
-
-    public static function requireAuth(): array
-    {
-        $user = self::user();
-        if (!$user) {
-            Response::error("UNAUTHORIZED", "Не сте логнати.", 401);
-        }
-        return $user;
     }
 
     public static function logout(): void

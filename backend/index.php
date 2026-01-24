@@ -10,14 +10,15 @@ require_once __DIR__ . "/app/Core/Request.php";
 require_once __DIR__ . "/app/Core/Response.php";
 require_once __DIR__ . "/app/Core/Database.php";
 require_once __DIR__ . "/app/Core/Session.php";
-require_once __DIR__ . "/app/Helpers/Router.php";
+require_once __DIR__ . "/app/Core/Router.php";
+require_once __DIR__ . "/app/Models/RequestMethod.php";
 
 require_once __DIR__ . "/config/cors.php";
 
-if ($_SERVER["REQUEST_METHOD"] !== "POST" && $_SERVER["REQUEST_METHOD"] !== "GET") {
-    Response::error("METHOD_NOT_ALLOWED", "Only POST and GET is allowed.", 405);
+if (RequestMethod::tryFrom($_SERVER['REQUEST_METHOD']) === null) {
+    Response::error("METHOD_NOT_ALLOWED", "Your request method is not allowed", 405);
 }
 
 $base_path = $_ENV['BASE_PATH'];
-$router = new Router('routes/', $base_path );
+$router = new Router('routes/', $base_path);
 $router->dispatch();

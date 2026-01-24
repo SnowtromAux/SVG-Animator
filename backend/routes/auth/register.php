@@ -1,39 +1,14 @@
 <?php
-require_once __DIR__ . "/../../app/Repositories/UserRepositories.php";
-require_once __DIR__ . "/../../app/Helpers/Validator.php";
-require_once __DIR__ . "/../../app/Helpers/Auth.php";
+declare(strict_types=1);
 
-$data = Request::json();
+require_once __DIR__ . "/../../app/Controllers/Auth.controller.php";
 
-$email = trim($data["email"] ?? "");
-$username = trim($data["username"] ?? "");
-$password = $data["password"] ?? "";
+$method = RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'] ?? '');
 
-Validator::email($email);
-Validator::username($username);
-Validator::password($password);
-
-$db = MySQLClient::getInstance();
-$db->connect();
-$conn = $db->getConnection();
-
-$existing = UserRepository::findByEmailOrUsername($conn, $email, $username);
-if ($existing) {
-    Response::error(
-        "USER_EXISTS",
-        "Email и/или username вече съществуват.",
-        409
-    );
+switch ($method) {
+    case RequestMethod::POST:
+        AuthController::register();
+        break;
+    default:
+        Response::error('METHOD_NOT_FOUND', "route with this method not found", 400);
 }
-
-$userId = UserRepository::create(
-    $conn,
-    $username,
-    $email,
-    Auth::hash($password)
-);
-
-Response::success([
-    "message" => "Регистрацията е успешна.",
-    "data" => ["id" => $userId]
-], 201);

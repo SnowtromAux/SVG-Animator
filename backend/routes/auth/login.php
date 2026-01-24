@@ -1,30 +1,20 @@
 <?php
+
 declare(strict_types=1);
 
-require_once __DIR__ . "/../../app/Repositories/UserRepositories.php";
-require_once __DIR__ . "/../../app/Helpers/Auth.php";
+require_once __DIR__ . "/../../app/Controllers/Auth.controller.php";
 
-$data = Request::json();
+// switch играе роля на рутер който пренасочва заявката спрямо нейният метод. Идеята е да имаме различни endpoint-и на един 
+// route спрямо типа на заявката, подобно на router-a в Express.js
+// когато добавяме нов контролер за дадена заявка, слагаме нов случай в switch case. 
+// за да добавим middleware който се изпълнява преди самият controller просто го поставяме над извикването на controller-a
 
-$login = trim((string)($data["login"] ?? ""));
-$password = (string)($data["password"] ?? "");
+$method = RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'] ?? '');
 
-if ($login === "" || $password === "") {
-    Response::error("INVALID_INPUT", "Липсва login или password.", 422);
+switch ($method) {
+    case RequestMethod::POST:
+        AuthController::login();
+        break;
+    default:
+        Response::error('METHOD_NOT_FOUND', "route with this method not found", 400);
 }
-
-$db = MySQLClient::getInstance();
-$db->connect();
-$conn = $db->getConnection();
-
-$user = UserRepository::findByEmailOrUsername($conn, $login, $login);
-
-if (!$user || !Auth::verify($password, $user["password"])) {
-    Response::error("INVALID_CREDENTIALS", "Грешен login или парола.", 401);
-}
-
-Session::login((int)$user["id"], (string)$user["username"], (string)$user["email"]);
-
-Response::success([
-    "message" => "Успешен вход.",
-]);
