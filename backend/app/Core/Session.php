@@ -39,15 +39,6 @@ class Session
         return $_SESSION["user"] ?? null;
     }
 
-    public static function requireAuth(): array
-    {
-        $user = self::user();
-        if (!$user) {
-            Response::error("UNAUTHORIZED", "Не сте логнати.", 401);
-        }
-        return $user;
-    }
-
     public static function logout(): void
     {
         self::start();

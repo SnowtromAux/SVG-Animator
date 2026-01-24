@@ -1,8 +1,8 @@
 <?php
 
-/// Клас Auth е помощен клас който се гриза за хеширане на пароли и сравнение на парола с хеширана такава
+/// Клас PasswordHasher е помощен клас който се гриза за хеширане на пароли и сравнение на парола с хеширана такава
 
-class Auth
+class PasswordHasher
 {
     public static function hash(string $password): string
     {
