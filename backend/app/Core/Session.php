@@ -1,8 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/// Session е клас който се грижи за сесиите от логването на user-a до logout-ването му
-
+/// Session е клас който се грижи за сесиите от логването на user-a до logout-ването му 
 class Session
 {
     public static function start(): void
