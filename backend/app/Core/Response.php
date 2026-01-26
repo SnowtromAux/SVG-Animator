@@ -6,7 +6,7 @@
 /// Метода error връща данните като json обект с поле success: false и информация за грешката
 class Response
 {
-    public static function json(array $data, int $status = 200): void
+    private static function json(array $data, int $status = 200): void
     {
         http_response_code($status);
         header("Content-Type: application/json; charset=UTF-8");
