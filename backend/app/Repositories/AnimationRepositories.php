@@ -3,6 +3,10 @@
 class AnimationRepositories{
 
     public static function deleteAnimationById($db, $animationId){
+
+        /// Не е нужно да се грижим за сегментите на анимацията тъй като когато изтрием 
+        /// анимация сегментите се изтриват автоматично
+
         $stmt = mysqli_prepare(
             $db,
             "DELETE FROM animation WHERE id = ?"
