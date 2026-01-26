@@ -18,7 +18,8 @@ class MySQLClient
         private string $db_server,
         private string $db_user,
         private string $db_password,
-        private string $db_name
+        private string $db_name,
+        private int $db_port
     ) {}
 
     public static function getInstance(): MySQLClient
@@ -29,12 +30,14 @@ class MySQLClient
             $db_user = $_ENV["DB_USER"];
             $db_password = $_ENV["DB_PASSWORD"];
             $db_name = $_ENV["DB_NAME"];
+            $db_port = $_ENV["DB_PORT"];
 
             self::$instance = new MySQLClient(
                 $db_server,
                 $db_user,
                 $db_password,
-                $db_name
+                $db_name,
+                $db_port
             );
         }
 
