@@ -1,228 +1,114 @@
 <?php
 
+require_once __DIR__ . "/../Helpers/DataBase.php";
+
 class AnimationRepositories
 {
-
-    public static function deleteAnimationById($db, $animationId)
+    public static function deleteAnimationById(mysqli $db, int $animationId): int
     {
-        /// Не е нужно да се грижим за сегментите на анимацията тъй като когато изтрием 
-        /// анимация сегментите се изтриват автоматично
+        $sql = "DELETE FROM animation WHERE id = ?;";
 
-        $stmt = mysqli_prepare(
+        return DataBase::exec(
             $db,
-            "DELETE FROM animation WHERE id = ?"
-        );
-
-        if (!$stmt) {
-            return false;
-        }
-
-        mysqli_stmt_bind_param($stmt, "i", $animationId);
-
-        mysqli_stmt_execute($stmt);
-        $affectedRows = mysqli_stmt_affected_rows($stmt);
-
-        mysqli_stmt_close($stmt);
-
-        return $affectedRows;
-    }
-
-    public static function createAnimation($db, $userId, $settings, $svgText, $name)
-    {
-        if (is_array($settings) || is_object($settings)) {
-            $settingsJson = json_encode($settings, JSON_UNESCAPED_UNICODE);
-        } else {
-            $settingsJson = (string)$settings;
-        }
-
-        json_decode($settingsJson);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return -1;
-        }
-
-        $stmt = mysqli_prepare(
-            $db,
-            "INSERT INTO animation (user_id, name, starting_svg, animation_settings)
-             VALUES (?, ?, ?, ?)"
-        );
-
-        if (!$stmt) {
-            return -1;
-        }
-
-        mysqli_stmt_bind_param($stmt, "isss", $userId, $name, $svgText, $settingsJson);
-
-        $ok = mysqli_stmt_execute($stmt);
-        if (!$ok) {
-            mysqli_stmt_close($stmt);
-            return -1;
-        }
-
-        $newId = mysqli_insert_id($db);
-        mysqli_stmt_close($stmt);
-
-        return $newId ?? -1;
-    }
-
-    public static function getAnimationUserId($db, $animationId){
-        $stmt = mysqli_prepare(
-            $db,
-            "SELECT user_id
-             FROM animation
-             WHERE id = ?;"
-        );
-
-        if (!$stmt) {
-            throw new Exception('Prepare failed: ' . mysqli_error($db));
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
+            $sql,
             "i",
-            $animationId
+            [$animationId]
         );
-
-        if (!mysqli_stmt_execute($stmt)) {
-            $err = mysqli_stmt_error($stmt);
-            mysqli_stmt_close($stmt);
-            throw new Exception('Execute failed: ' . $err);
-        }
-
-        mysqli_stmt_bind_result($stmt, $userId);
-        $fetched = mysqli_stmt_fetch($stmt);
-        mysqli_stmt_close($stmt);
-
-        if ($fetched === null) {
-            return -1;
-        }
-
-        if ($fetched === false) {
-            return -1;
-        }
-
-        return $userId;
     }
 
-
-    private static function updateAnimationData($db, $animationId, $animationSettings, $animationName, $totalDuration)
+    public static function createAnimation(mysqli $db, int $userId, array|string $settings, string $svgText, string $name): int
     {
-        $stmt = mysqli_prepare(
+        $settingsJson = is_string($settings)
+            ? $settings
+            : json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $sql = "INSERT INTO animation (user_id, name, starting_svg, animation_settings) VALUES (?, ?, ?, ?);";
+
+        return DataBase::insert(
             $db,
-            "UPDATE animation
-                 SET
-                 animation_settings = ?,
-                 name = ?,
-                 duration = ?
-            WHERE id = ?;"
+            $sql,
+            "isss",
+            [$userId, $name, $svgText, $settingsJson]
         );
-
-        if (!$stmt) {
-            throw new Exception('Prepare failed: ' . mysqli_error($db));
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "ssii",
-            $animationSettings,
-            $animationName,
-            $totalDuration,
-            $animationId
-        );
-
-        if (!mysqli_stmt_execute($stmt)) {
-            throw new Exception('Execute failed: ' . mysqli_stmt_error($stmt));
-        }
-
-        mysqli_stmt_close($stmt);
     }
 
-    private static function deleteOldAnimationSegments($db, $animationId)
+    public static function getAnimationUserId(mysqli $db, int $animationId): ?int
     {
-        $stmt = mysqli_prepare(
+        $sql = "SELECT user_id FROM animation WHERE id = ?;";
+
+        $val = DataBase::fetchValue(
             $db,
-            "DELETE FROM animation_segment
-             WHERE animation_id = ?;"
-        );
-
-        if (!$stmt) {
-            throw new Exception('Prepare failed: ' . mysqli_error($db));
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
+            $sql,
             "i",
-            $animationId
+            [$animationId]
         );
 
-        if (!mysqli_stmt_execute($stmt)) {
-            throw new Exception('Execute failed: ' . mysqli_stmt_error($stmt));
-        }
-
-        mysqli_stmt_close($stmt);
+        return $val === null ? null : (int)$val;
     }
 
-    private static function createNewAnimationSegments($db, $animationId, $step, $duration, $easing, $animationData)
-    {
-        $stmt = mysqli_prepare(
+    public static function updateAnimation(
+        mysqli $db,
+        int $animationId,
+        string $animationSettings,
+        string $animationName,
+        int $totalDuration,
+        array $animationSegments
+    ): bool {
+        DataBase::transaction(
             $db,
-            "INSERT INTO animation_segment (animation_id, step, animation_data, easing, duration )
-             VALUES (?,?,?,?,?);"
+            function () use ($db, $animationId, $animationSettings, $animationName, $totalDuration, $animationSegments) {
+
+                $sql_update = "UPDATE animation 
+                               SET 
+                               animation_settings = ?, 
+                               name = ?, duration = ?
+                               WHERE id = ?";
+
+                DataBase::exec(
+                    $db,
+                    $sql_update,
+                    "ssii",
+                    [$animationSettings, $animationName, $totalDuration, $animationId]
+                );
+
+                $sql_delete_segment = "DELETE 
+                                       FROM animation_segment 
+                                       WHERE animation_id = ?";
+
+                DataBase::exec(
+                    $db,
+                    $sql_delete_segment,
+                    "i",
+                    [$animationId]
+                );
+
+                $sql_segment = "INSERT INTO animation_segment
+                               (
+                                animation_id, 
+                                step,
+                                animation_data,
+                                easing,
+                                duration
+                                ) 
+                                VALUES (?,?,?,?,?);";
+
+                foreach ($animationSegments as $segment) {
+                    DataBase::exec(
+                        $db,
+                        $sql_segment,
+                        "iissi",
+                        [
+                            $animationId,
+                            (int)$segment["step"],
+                            (string)$segment["animation_data"],
+                            (string)$segment["easing"],
+                            (int)$segment["duration"],
+                        ]
+                    );
+                }
+            }
         );
 
-        if (!$stmt) {
-            throw new Exception('Prepare failed: ' . mysqli_error($db));
-        }
-
-        mysqli_stmt_bind_param(
-            $stmt,
-            "iissi",
-            $animationId,
-            $step,
-            $animationData,
-            $easing,
-            $duration
-        );
-
-        if (!mysqli_stmt_execute($stmt)) {
-            throw new Exception('Execute failed: ' . mysqli_stmt_error($stmt));
-        }
-
-        mysqli_stmt_close($stmt);
-    }
-
-
-    public static function updateAnimation($db, $animationId, $animationSettings, $animationName, $totalDuration, $animationSegments): bool
-    {
-        $oldAutocommit = mysqli_autocommit($db, false);
-
-        try {
-            if (!mysqli_begin_transaction($db)) {
-                throw new Exception('Begin transaction failed: ' . mysqli_error($db));
-            }
-
-            self::updateAnimationData($db, $animationId, $animationSettings, $animationName, $totalDuration);
-            self::deleteOldAnimationSegments($db, $animationId);
-
-            foreach ($animationSegments as $segment) {
-                $step = (int)$segment["step"];
-                $duration = (int)$segment["duration"];
-                $easing = (string)$segment["easing"];
-                $animationData = $segment["animation_data"]; // JSON string
-
-                self::createNewAnimationSegments($db, $animationId, $step, $duration, $easing, $animationData);
-            }
-
-            if (!mysqli_commit($db)) {
-                throw new Exception('Commit failed: ' . mysqli_error($db));
-            }
-
-            mysqli_autocommit($db, true);
-            return true;
-        } catch (Exception $e) {
-            mysqli_rollback($db);
-            mysqli_autocommit($db, true);
-
-            return false;
-        }
+        return true;
     }
 }

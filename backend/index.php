@@ -21,4 +21,12 @@ if (RequestMethod::tryFrom($_SERVER['REQUEST_METHOD']) === null) {
 
 $base_path = $_ENV['BASE_PATH'];
 $router = new Router('routes/', $base_path);
-$router->dispatch();
+
+
+try {
+    $router->dispatch();
+} catch (mysqli_sql_exception $e) {
+    Response::error("DATABASE_ERROR", $e->getMessage(), 500);
+} catch (Exception $e) {
+    Response::error("INTERNAL_SERVER_ERROR", $e->getMessage(), 500);
+}
