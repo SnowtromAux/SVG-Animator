@@ -26,4 +26,10 @@ class Validator
             throw new Exception("Паролата трябва да е поне 6 символа.");
         }
     }
+
+    public static function checkUserId(int $animationUserId) {
+        if(Session::user()["id"] !== $animationUserId){
+            throw new Exception("Вие не сте собственик на тази анимация");
+        }
+    }
 }
