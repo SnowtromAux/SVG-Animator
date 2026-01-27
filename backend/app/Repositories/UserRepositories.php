@@ -15,8 +15,10 @@ class UserRepository
         mysqli_stmt_bind_result($stmt, $id, $e, $u, $p);
 
         if (mysqli_stmt_fetch($stmt)) {
+            mysqli_stmt_close($stmt);
             return ["id" => $id, "email" => $e, "username" => $u, "password" => $p];
         }
+        mysqli_stmt_close($stmt);
         return null;
     }
 
@@ -28,6 +30,7 @@ class UserRepository
         );
         mysqli_stmt_bind_param($stmt, "sss", $username, $email, $password);
         mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
         return mysqli_insert_id($db);
     }
 }
