@@ -42,4 +42,38 @@ class AnimationController
             );
         }
     }
+
+    public static function createAnimation(){
+
+        $userId = Session::user()["id"];
+
+        $data = Request::json();
+        $svgText = $data["svg_text"];
+        $settings = $data["settings"];
+        $name = $data["name"];
+        
+        try {
+            $db = MySQLClient::getInstance();
+            $db->connect();
+            $conn = $db->getConnection();
+        } catch (Exception $e) {
+            Response::error(
+                "INTERNAL_SERVER_ERROR",
+                $e->getMessage(),
+                500
+            );
+        }
+
+        $newID = AnimationRepositories::createAnimation($conn, $userId ,$settings, $svgText, $name);
+
+        if($newID === -1){
+            Response::error("CREATION_FAILED", "failed to create animation");
+        }
+        else{
+            Response::success([
+                "message" => "Успешно създадена анимация",
+                "id" => $newID
+            ], 200);
+        }
+    }
 }
