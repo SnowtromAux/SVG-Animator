@@ -16,13 +16,16 @@ class AnimationController extends Controller
                 $animationId = $data["animation_id"];
 
                 $animationUserId = AnimationRepositories::getAnimationUserId($conn, $animationId);
-
-                try {
-                    Validator::checkUserId($animationUserId);
-                } catch (Exception $e) {
-                    Response::error("INVALID_USER", $e->getMessage());
+                if ($animationUserId === null) {
+                    Response::error("ANIMATION_NOT_FOUND", "не може да открием анимация с това id", 401);
                     return;
                 }
+
+                if(!Validator::checkUserId($animationUserId)){
+                    Response::error("FORBIDDEN", "не може да изтриете анимация която не е ваша", 403);
+                    return;
+                }
+
                 $affectedRows = AnimationRepositories::deleteAnimationById($conn, $animationId);
 
                 if ($affectedRows === 1) {
@@ -84,11 +87,14 @@ class AnimationController extends Controller
 
                 $animationUserId = AnimationRepositories::getAnimationUserId($conn, $animationId);
                 if ($animationUserId === null) {
-                    Response::error("ANIMATION_NOT_FOUND", "не може да открием анимация с това id");
+                    Response::error("ANIMATION_NOT_FOUND", "не може да открием анимация с това id", 401);
                     return;
                 }
 
-                Validator::checkUserId($animationUserId);
+                if(!Validator::checkUserId($animationUserId)){
+                    Response::error("FORBIDDEN", "не може да променяте анимация която не е ваша", 403);
+                    return;
+                }
 
                 $totalDuration = 0;
                 foreach ($animationSegments as $segment) {
