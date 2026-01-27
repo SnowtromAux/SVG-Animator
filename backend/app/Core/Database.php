@@ -59,7 +59,7 @@ class MySQLClient
         );
     }
 
-    public function getConnection()
+    public function getConnection(): mysqli 
     {
         if ($this->connection === null) {
             throw new Exception("Database not connected");
