@@ -81,4 +81,25 @@ class DataBase
             mysqli_stmt_close($stmt);
         }
     }
+
+    public static function fetchAll(mysqli $db, string $sql, string $types = "", array $params = []): array
+    {
+        $stmt = self::stmt($db, $sql, $types, $params);
+        try {
+            mysqli_stmt_execute($stmt);
+
+            $result = mysqli_stmt_get_result($stmt);
+            if ($result === false) {
+                throw new RuntimeException("mysqlnd is required for fetchAll via get_result()");
+            }
+
+            $rows = [];
+            while ($row = mysqli_fetch_assoc($result)) {
+                $rows[] = $row;
+            }
+            return $rows;
+        } finally {
+            mysqli_stmt_close($stmt);
+        }
+    }
 }

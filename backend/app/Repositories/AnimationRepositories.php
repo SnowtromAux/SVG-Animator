@@ -111,4 +111,42 @@ class AnimationRepositories
 
         return true;
     }
+
+    public static function getAnimationById(mysqli $db, int $animationId): ?array
+    {
+        $sqlAnimation = "
+            SELECT id, name, starting_svg, animation_settings, duration
+            FROM animation
+            WHERE id = ?;
+        ";
+
+        $animation = DataBase::fetchRow($db, $sqlAnimation, "i", [$animationId]);
+        if ($animation === null) {
+            return null;
+        }
+
+        $animation["id"] = (int)$animation["id"];
+        $animation["duration"] = (int)$animation["duration"];
+
+        $sqlSegments = "
+            SELECT id, animation_id, step, animation_data, easing, duration
+            FROM animation_segment
+            WHERE animation_id = ?
+            ORDER BY step ASC;
+        ";
+
+        $segments = DataBase::fetchAll($db, $sqlSegments, "i", [$animationId]);
+
+        foreach ($segments as &$seg) {
+            $seg["id"] = (int)$seg["id"];
+            $seg["animation_id"] = (int)$seg["animation_id"];
+            $seg["step"] = (int)$seg["step"];
+            $seg["duration"] = (int)$seg["duration"];
+        }
+        unset($seg);
+
+        $animation["animation_segments"] = $segments;
+
+        return $animation;
+    }
 }

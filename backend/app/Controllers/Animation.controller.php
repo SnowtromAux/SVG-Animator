@@ -21,7 +21,7 @@ class AnimationController extends Controller
                     return;
                 }
 
-                if(!Validator::checkUserId($animationUserId)){
+                if (!Validator::checkUserId($animationUserId)) {
                     Response::error("FORBIDDEN", "не може да изтриете анимация която не е ваша", 403);
                     return;
                 }
@@ -91,7 +91,7 @@ class AnimationController extends Controller
                     return;
                 }
 
-                if(!Validator::checkUserId($animationUserId)){
+                if (!Validator::checkUserId($animationUserId)) {
                     Response::error("FORBIDDEN", "не може да променяте анимация която не е ваша", 403);
                     return;
                 }
@@ -117,6 +117,31 @@ class AnimationController extends Controller
                         "message" => "успешно запазена анимация"
                     ], 200);
                 }
+            }
+        );
+    }
+
+    public static function getAnimation(): void
+    {
+        self::withDb(
+            function ($conn) {
+                $animationId = (int)Request::param("animation_id");
+                if (!$animationId) {
+                    Response::error("MISSING_ID", "не е предоставено animation_id", 400);
+                    return;
+                }
+
+                $animationUserId = (int)AnimationRepositories::getAnimationUserId($conn, $animationId);
+                if (!Validator::checkUserId($animationUserId)) {
+                    Response::error("FORBIDDEN", "не може да достъпите анимация която не е ваша", 403);
+                    return;
+                }
+
+                $animation = AnimationRepositories::getAnimationById($conn, $animationId);
+
+                Response::success([
+                    "animation" => $animation
+                ], 200);
             }
         );
     }
