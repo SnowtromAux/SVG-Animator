@@ -145,4 +145,24 @@ class AnimationController extends Controller
             }
         );
     }
+
+    public static function getAllAnimations(): void
+    {
+        self::withDb(function ($conn) {
+            $page = (int)Request::param("page", 1);
+            $userId = Session::user()["id"];
+
+            $data = AnimationRepositories::getAnimationsByUser($conn, $userId, $page);
+
+            if (!$data["ok"]) {
+                Response::error("PAGE_PROBLEM", $data['error'], 404);
+                return;
+            }
+
+            Response::success([
+                    "animation_ids" => $data["items"],
+                    "numOfPages" => $data["numOfPages"]
+                ],200);
+        });
+    }
 }

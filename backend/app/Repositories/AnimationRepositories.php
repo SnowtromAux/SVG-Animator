@@ -149,4 +149,54 @@ class AnimationRepositories
 
         return $animation;
     }
+
+    public static function getAnimationsByUser(mysqli $db, int $userId, int $page): ?array
+    {
+        $perPage = (int)($_ENV["NUM_OF_ANIMATIONS_PER_PAGE"] ?? 20);
+        if ($perPage <= 0) $perPage = 20;
+
+        if ($page < 1) {
+            return [
+                "ok" => false,
+                "error" => "Invalid page",
+                "items" => []
+            ];
+        }
+
+        $countSql = "SELECT COUNT(*) AS total 
+                     FROM animation 
+                     WHERE user_id = ?";
+        
+        $countRow = DataBase::fetchRow($db, $countSql, "i", [$userId]);
+        $totalItems = (int)($countRow["total"] ?? 0);
+
+        $totalPages = $totalItems === 0 ? 0 : (int)ceil($totalItems / $perPage);
+
+        if (($totalPages === 0 && $page !== 1) || ($totalPages > 0 && $page > $totalPages)) {
+            return [
+                "ok" => false,
+                "error" => "Page out of range",
+                "items" => [],
+            ];
+        }
+
+        $offset = ($page - 1) * $perPage;
+
+        $sql = "SELECT id
+                FROM animation
+                WHERE user_id = ?
+                ORDER BY id ASC
+                LIMIT ? OFFSET ?
+                ";
+
+        $rows = DataBase::fetchAll($db, $sql, "iii", [$userId, $perPage, $offset]);
+
+        $ids = array_map(fn($r) => (int)$r["id"], $rows);
+
+        return [
+            "ok" => true,
+            "items" => $ids,
+            "numOfPages" => $totalPages
+        ];
+    }
 }
