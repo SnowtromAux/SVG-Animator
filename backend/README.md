@@ -207,7 +207,7 @@ routes/
 
 Ключови неща:
 - `MySQLClient::getInstance()` чете:
-  - `DB_SERVER`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` от `$_ENV`
+  - `DB_SERVER`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT` от `$_ENV`
 - `connect()` създава `mysqli_connect(...)` само ако няма връзка.
 - `getConnection()` връща mysqli connection или хвърля exception ако не е `connect()`-нато.
 
@@ -497,20 +497,15 @@ Endpoint:
 ```php
 <?php
 
-require_once __DIR__ . "/../../app/Core/Request.php";
-require_once __DIR__ . "/../../app/Core/Response.php";
-require_once __DIR__ . "/../../app/Models/RequestMethod.php";
+$method = RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'] ?? '');
 
-require_once __DIR__ . "/../../app/Core/Session.php";
-require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
-
-requireAuth();
-
-if ($_SERVER["REQUEST_METHOD"] !== RequestMethod::PUT->value) {
-    Response::error("METHOD_NOT_ALLOWED", "Only PUT is allowed.", 405);
+switch ($method) {
+    case RequestMethod::POST:
+        AuthController::login();
+        break;
+    default:
+        Response::error('METHOD_NOT_FOUND', "route with this method not found", 400);
 }
-
-Response::success(["message" => "OK"]);
 ```
 
 ---
@@ -540,10 +535,11 @@ case PATCH = 'PATCH';
 ## База данни
 
 ### Конфигурация (.env)
-- DB_SERVER
-- DB_USER
-- DB_PASSWORD
-- DB_NAME
+- DB_SERVER=
+- DB_USER=
+- DB_PASSWORD=
+- DB_NAME=
+- DB_PORT=
 
 Зареждане:
 ```php
