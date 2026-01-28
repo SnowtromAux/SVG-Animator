@@ -2,8 +2,13 @@
 
 declare(strict_types=1);
 
+/// DataBase е клас който слага абстракция върху стандартните
+/// методи за изпълнение на заявки към базата данни с цел преизползване на код
+/// и улеснен начин на изпъление на заявки
+
 class DataBase
 {
+    /// stmt създава връзката между заявката и базата, като и байндва необходимите параметри
     public static function stmt(mysqli $db, string $sql, string $types = "", array $params = []): mysqli_stmt
     {
         $stmt = mysqli_prepare($db, $sql);
@@ -13,6 +18,7 @@ class DataBase
         return $stmt;
     }
 
+    /// exec изпълнява заявка към базата и връща броя променени редове
     public static function exec(mysqli $db, string $sql, string $types = "", array $params = []): int
     {
         $stmt = self::stmt($db, $sql, $types, $params);
@@ -24,6 +30,7 @@ class DataBase
         }
     }
 
+    /// insert вмъква нов ред в таблицата 
     public static function insert(mysqli $db, string $sql, string $types = "", array $params = []): int
     {
         $stmt = self::stmt($db, $sql, $types, $params);
@@ -35,6 +42,7 @@ class DataBase
         }
     }
 
+    /// взима някаква стойност от базата
     public static function fetchValue(mysqli $db, string $sql, string $types = "", array $params = []): mixed
     {
         $stmt = self::stmt($db, $sql, $types, $params);
@@ -51,6 +59,8 @@ class DataBase
         }
     }
 
+    /// transaction приема функция която изпълнява няколко заявки, 
+    /// яко някоя от тях фейлне базата се връща в състоянието от преди заявката
     public static function transaction(mysqli $db, callable $fn): mixed
     {
         mysqli_begin_transaction($db);
@@ -64,6 +74,7 @@ class DataBase
         }
     }
 
+    /// връща ред от базата
     public static function fetchRow(mysqli $db, string $sql, string $types = "", array $params = []): ?array
     {
         $stmt = self::stmt($db, $sql, $types, $params);
@@ -82,6 +93,7 @@ class DataBase
         }
     }
 
+    /// връща всички редове от таблицата които отговарят на заявката
     public static function fetchAll(mysqli $db, string $sql, string $types = "", array $params = []): array
     {
         $stmt = self::stmt($db, $sql, $types, $params);

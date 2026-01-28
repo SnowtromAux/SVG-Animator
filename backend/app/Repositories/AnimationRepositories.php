@@ -2,6 +2,8 @@
 
 require_once __DIR__ . "/../Helpers/DataBase.php";
 
+/// AnimationRepositories е клас който държи всички методи които правят заявки към базата 
+/// свързани с анимация
 class AnimationRepositories
 {
     public static function deleteAnimationById(mysqli $db, int $animationId): int

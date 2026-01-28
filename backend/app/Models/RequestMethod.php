@@ -1,4 +1,7 @@
 <?php
+
+// позволените rest api методи 
+
 enum RequestMethod: string
 {
     case GET = 'GET';

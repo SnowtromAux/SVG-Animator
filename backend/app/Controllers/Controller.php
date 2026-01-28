@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+/// Controller е абстрактен клас който се наследява от контролерите. 
 abstract class Controller
 {
+    /// withDb е wrapper фунцкия която обвива логика за свързване с 
+    /// базата данни преди изпълнението на функцията с цел преизползване на код 
     protected static function withDb(callable $fn): void
     {
         try {

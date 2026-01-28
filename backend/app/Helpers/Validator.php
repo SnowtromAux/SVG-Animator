@@ -7,7 +7,6 @@ class Validator
     public static function email(string $email): bool
     {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            // throw new Exception("Невалиден email");
             return false;
         }
         return true;
@@ -18,7 +17,6 @@ class Validator
         if (!filter_var($username, FILTER_VALIDATE_REGEXP, [
             "options" => ["regexp" => "/^[A-Za-z0-9._-]{3,50}$/"]
         ])) {
-            // throw new Exception("Невалиден username");
             return false;
         }
         return true;
@@ -27,7 +25,6 @@ class Validator
     public static function password(string $password): bool
     {
         if (strlen($password) < 6) {
-            // throw new Exception("Паролата трябва да е поне 6 символа.");
             return false;
         }
         return true;
@@ -36,7 +33,6 @@ class Validator
     public static function checkUserId(int $animationUserId): bool
     {
         if (Session::user()["id"] !== $animationUserId) {
-            // throw new Exception("Вие не сте собственик на тази анимация");
             return false;
         }
         return true;

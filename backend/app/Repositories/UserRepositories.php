@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . "/../Helpers/DataBase.php";
 
+// UserRepository е клас който държи всички методи които правят заявки към базата 
+/// свързани с user
 class UserRepository
 {
     public static function findByEmailOrUsername(mysqli $db, string $email, string $username): ?array

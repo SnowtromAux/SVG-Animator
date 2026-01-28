@@ -16,6 +16,10 @@
 - [Архитектура и структура](#архитектура-и-структура)
 - [Поток на заявките](#поток-на-заявките)
 - [Класове и файлове](#класове-и-файлове)
+- [Middlewares](#middlewares)
+- [Models](#models)
+- [Repositories](#repositories)
+- [Controllers](#controllers)
 - [Endpoints и routing](#endpoints-и-routing)
 - [Как се добавя нов endpoint](#как-се-добавя-нов-endpoint)
 - [Как се добавя нов тип заявка](#как-се-добавя-нов-тип-заявка)
@@ -35,6 +39,8 @@ backend/
 app/
     Controllers/
         Auth.controller.php
+        Animation.controller.php
+        Controller.php
 
 Core/
     Database.php
@@ -42,6 +48,7 @@ Core/
     Response.php
     Router.php
     Session.php
+    DataBase.php
 
 Helpers/
     EnvLoader.php
@@ -56,6 +63,7 @@ Models/
 
 Repositories/
     UserRepositories.php
+    AnimationRepositories.php
 
 Services/
     empty for now
@@ -73,14 +81,14 @@ routes/
         logout.php
         me.php
         register.php
-
-
+    animation/
+        (endpoints според наличните route файлове)
 
 **Идея на структурата:**
 - `index.php` – entrypoint, bootstrap-ва средата, CORS, core класове и пуска Router-а.
 - `routes/` – реалните endpoint-и като файлове (file-based routing).
 - `Controllers/` – HTTP handlers (логика по операции).
-- `Repositories/` – комуникация с базата (SQL, prepared statements).
+- `Repositories/` – комуникация с базата (SQL, prepared statements / helper абстракции).
 - `Core/` – инфраструктура: Request, Response, Router, Session, Database.
 - `Helpers/` – utility класове (валидация, хеширане, .env loader).
 - `Middlewares/` – защити/проверки, които се викат в началото на route файлове.
@@ -109,7 +117,7 @@ routes/
 5. Controller методът:
    - чете JSON (`Request::json()`)
    - валидира (`Validator`)
-   - работи с DB чрез `MySQLClient` и `UserRepository`
+   - работи с DB чрез `MySQLClient` (+ repositories / DB helper-и)
    - връща JSON отговор чрез `Response::success()` или `Response::error()`
 
 ---
@@ -199,9 +207,64 @@ routes/
 
 Ключови неща:
 - `MySQLClient::getInstance()` чете:
-  - `DB_SERVER`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` от `$_ENV`
+  - `DB_SERVER`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT` от `$_ENV`
 - `connect()` създава `mysqli_connect(...)` само ако няма връзка.
 - `getConnection()` връща mysqli connection или хвърля exception ако не е `connect()`-нато.
+
+---
+
+### `app/Core/DataBase.php` (`DataBase`)
+**Цел:** helper/абстракция над `mysqli` prepared statements за да няма повтаряне на `prepare/bind/execute/close` и за по-лесно взимане на резултати.
+
+Методи:
+- `DataBase::stmt(mysqli $db, string $sql, string $types = "", array $params = []): mysqli_stmt`
+  - подготвя prepared statement
+  - ако има `$types` → bind-ва `$params`
+  - връща `mysqli_stmt` (не го изпълнява)
+
+- `DataBase::exec(mysqli $db, string $sql, string $types = "", array $params = []): int`
+  - prepare + execute
+  - връща `affected_rows`
+  - винаги затваря statement-а
+  - подходящо за UPDATE/DELETE/INSERT (без да ти трябва id)
+
+- `DataBase::insert(mysqli $db, string $sql, string $types = "", array $params = []): int`
+  - изпълнява INSERT
+  - връща `mysqli_insert_id($db)`
+  - винаги затваря statement-а
+
+- `DataBase::fetchValue(mysqli $db, string $sql, string $types = "", array $params = []): mixed`
+  - връща първата колона от първия ред или `null`
+  - изисква `mysqlnd` (ползва `mysqli_stmt_get_result`), иначе хвърля Exception
+
+- `DataBase::fetchRow(mysqli $db, string $sql, string $types = "", array $params = []): ?array`
+  - връща един ред като assoc масив или `null`
+  - изисква `mysqlnd`, иначе хвърля RuntimeException
+  - винаги затваря statement-а
+
+- `DataBase::fetchAll(mysqli $db, string $sql, string $types = "", array $params = []): array`
+  - връща всички редове като масив от assoc масиви (или `[]`)
+  - изисква `mysqlnd`, иначе хвърля RuntimeException
+  - винаги затваря statement-а
+
+- `DataBase::transaction(mysqli $db, callable $fn): mixed`
+  - begin transaction → изпълнява `$fn()` → commit
+  - при грешка → rollback и rethrow
+  - връща резултата от `$fn()`
+
+---
+
+### `app/Controllers/Controller.php` (`Controller`)
+**Цел:** базов клас за контролерите, който централизира:
+- свързване към DB
+- обработка на DB/вътрешни грешки и връщане на стандартен error response
+
+Метод:
+- `protected static function withDb(callable $fn): void`
+  - взима `MySQLClient::getInstance()`, `connect()`, `getConnection()`
+  - изпълнява `$fn($conn)`
+  - при `mysqli_sql_exception` → `Response::error("DATABASE_ERROR", ..., 500)`
+  - при `Exception` → `Response::error("INTERNAL_SERVER_ERROR", ..., 500)`
 
 ---
 
@@ -233,6 +296,8 @@ routes/
 
 ---
 
+## Middlewares
+
 ### `app/Middlewares/requireAuth.php`
 **Цел:** middleware за защитени endpoint-и.
 
@@ -240,178 +305,286 @@ routes/
 - проверява `$_SESSION["user"]`
 - ако няма user → `Response::error("UNAUTHORIZED", "Не сте логнати.", 401)`
 
-Използване: в началото на route файл.
+**Използване:** в началото на route файл.
+
 ```php
 require_once __DIR__ . "/../../app/Core/Session.php";
 require_once __DIR__ . "/../../app/Core/Response.php";
 require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
 
 requireAuth();
+```
 
+---
 
-app/Models/RequestMethod.php
+## Models
+
+### `app/Models/RequestMethod.php`
 Enum за позволените HTTP методи:
-GET, POST, PUT, DELETE
-Използва се в index.php, за да се режат непозволени методи с 405.
+- GET
+- POST
+- PUT
+- DELETE
 
+**Използване:**
+- използва се в `index.php`
+- валидира HTTP метода
+- при непозволен метод връща `405 METHOD_NOT_ALLOWED`
 
-app/Repositories/UserRepositories.php (UserRepository)
-Цел: всички DB операции, свързани с user.
+---
+
+## Repositories
+
+### `app/Repositories/UserRepositories.php` (`UserRepository`)
+**Цел:** всички DB операции, свързани с user.
+
+**Методи:**
+- `findByEmailOrUsername(mysqli $db, string $email, string $username): ?array`  
+  SELECT id, email, username, password FROM user
+- `create(mysqli $db, string $username, string $email, string $password): int`  
+  INSERT INTO user, връща insert_id
+
+**Забележка:**
+- използва `mysqli_prepare` и `bind_param`
+- защита срещу SQL injection
+
+---
+
+### `app/Repositories/AnimationRepositories.php` (`AnimationRepositories`)
+**Цел:** CRUD заявки за анимации и сегменти (repository слой, само DB логика).
+
 Методи:
-findByEmailOrUsername(mysqli $db, string $email, string $username): ?array
-SELECT id, email, username, password от таблица user
-create(mysqli $db, string $username, string $email, string $password): int
-INSERT в user, връща insert_id
-Забележка: използва mysqli_prepare и bind параметри → безопасно срещу SQL injection.
+- `deleteAnimationById(mysqli $db, int $animationId): int`
+  - DELETE от `animation` по id
+  - връща affected rows (0 или 1)
 
+- `createAnimation(mysqli $db, int $userId, array|string $settings, string $svgText, string $name): int`
+  - `$settings` → JSON string (ако е array → `json_encode`)
+  - INSERT в `animation` (user_id, name, starting_svg, animation_settings)
+  - връща новото id
 
-app/Controllers/Auth.controller.php (AuthController)
-Цел: auth операции.
-Методи:
-register()
-чете JSON: email, username, password
-валидира с Validator
-проверява дали user съществува (UserRepository::findByEmailOrUsername)
-създава user (UserRepository::create) със hashed password
-връща 201 при успех
-login()
-чете JSON: login (email или username) и password
-намира user (по email/username)
-проверява паролата (PasswordHasher::verify)
-Session::login(...)
-logout()
-Session::logout()
-me()
-връща $_SESSION["user"]
-(на практика този endpoint трябва да е защитен с requireAuth() в route файла)
+- `getAnimationUserId(mysqli $db, int $animationId): ?int`
+  - връща `user_id` за даден `animationId` или `null`
 
+- `updateAnimation(mysqli $db, int $animationId, string $animationSettings, string $animationName, int $totalDuration, array $animationSegments): bool`
+  - транзакционно:
+    - UPDATE на `animation` (settings, name, duration)
+    - DELETE на сегментите за animation_id
+    - INSERT на сегментите наново
+  - връща `true` ако транзакцията мине без exception
 
-Endpoints и routing
-Router-ът работи по файловата система:
-GET/POST ... /<BASE_PATH>/auth/login → routes/auth/login.php
-... /<BASE_PATH>/auth/register → routes/auth/register.php
-... /<BASE_PATH>/auth/logout → routes/auth/logout.php
-... /<BASE_PATH>/auth/me → routes/auth/me.php
+- `getAnimationById(mysqli $db, int $animationId): ?array`
+  - чете `animation` (id, name, starting_svg, animation_settings, duration)
+  - ако няма → `null`
+  - чете сегменти от `animation_segment` (ORDER BY step ASC)
+  - каства числови полета към `int`
+  - добавя сегментите в `animation["animation_segments"]`
 
-Важно: Router-ът сам по себе си не рутира по HTTP method. Един route файл отговаря за конкретния path; вътре в него вие решавате дали приемате GET/POST и т.н.
+- `getAnimationsByUser(mysqli $db, int $userId, int $page): array`
+  - pagination:
+    - `perPage` от `$_ENV["NUM_OF_ANIMATIONS_PER_PAGE"]` (default 20)
+    - валидира `page`
+    - брои total + смята totalPages
+    - връща ids за страницата (ORDER BY id ASC, LIMIT/OFFSET)
+  - връща структура:
+    - успех: `["ok"=>true, "items"=>[ids...], "numOfPages"=>totalPages]`
+    - проблем: `["ok"=>false, "error"=>"...", "items"=>[]]`
 
+---
 
-Как се добавя нов endpoint
-1) Създай route файл в routes/
+## Controllers
 
-Пример: искаме endpoint:
-/api/profile/update
+### `app/Controllers/Auth.controller.php` (`AuthController`)
+**Цел:** регистрация/логин/логаут и информация за текущия потребител.
 
-Създаваме:
-routes/profile/update.php
+#### `register()`
+- чете JSON body: email, username, password
+- валидира:
+  - email → `Validator::email`
+  - username → `Validator::username`
+  - password → `Validator::password`
+- проверява дали има съществуващ потребител по email или username (`UserRepository::findByEmailOrUsername`)
+- ако няма → създава потребител (`UserRepository::create`) с хеширана парола (`PasswordHasher::hash`)
+- връща success (201) с новото user id
 
-2) В route файла: включи нужните зависимости и извикай handler
+#### `login()`
+- чете JSON body: login (email или username) и password
+- търси потребител (`findByEmailOrUsername`)
+- проверява паролата (`PasswordHasher::verify`)
+- ако е валидно → `Session::login(id, username, email)`
+- връща success или error при грешни данни
 
-Примерен skeleton:
+#### `logout()`
+- `Session::logout()`
+- връща success message
 
+#### `me()`
+- връща информацията за логнатия потребител от `$_SESSION["user"]`
+- endpoint-ът трябва да е защитен с `requireAuth()`
+
+---
+
+### `app/Controllers/Animation.controller.php` (`AnimationController`)
+**Цел:** операции за анимации (валидира вход/достъп и ползва repository метода за DB).
+
+#### `createAnimation(): void`
+- взима текущия user id от `Session::user()["id"]`
+- чете JSON body: `svg_text`, `settings`, `name`
+- създава анимация чрез `AnimationRepositories::createAnimation`
+- връща success с новото id или error
+
+#### `saveAnimation(): void`
+- чете JSON body:
+  - `animation_id`, `animation_settings`, `animation_name`, `animation_segments`
+- проверява дали анимацията съществува и дали потребителят е собственик
+- изчислява totalDuration като сума на `duration` за сегментите
+- обновява анимацията + сегментите чрез `AnimationRepositories::updateAnimation` (транзакционно)
+- връща success/error според резултата
+
+#### `getAnimation(): void`
+- чете route param `animation_id`
+- ако липсва → `Response::error("MISSING_ID", ...)`
+- проверява owner id (`getAnimationUserId`) и достъп (`Validator::checkUserId`)
+- връща пълната анимация (`getAnimationById`) чрез `Response::success`
+
+#### `getAllAnimations(): void`
+- чете `page` от query/params (default 1)
+- взима текущия user id
+- вика `getAnimationsByUser`
+  - ако `ok=false` → `Response::error(..., 404)`
+  - ако `ok=true` → `Response::success(["animation_ids"=>..., "numOfPages"=>...])`
+
+#### `deleteAnimation(): void`
+- чете JSON body и взима `animation_id`
+- проверява дали съществува (`getAnimationUserId`) и достъп (`Validator::checkUserId`)
+- изтрива (`deleteAnimationById`)
+- връща:
+  - success ако `affectedRows === 1`
+  - error ако `affectedRows === 0` или неочакван резултат
+
+---
+
+## Endpoints и routing
+
+Router-ът работи file-based.
+
+Примери:
+- `/auth/login` → `routes/auth/login.php`
+- `/auth/register` → `routes/auth/register.php`
+- `/auth/logout` → `routes/auth/logout.php`
+- `/auth/me` → `routes/auth/me.php`
+
+**Важно:**
+- Router-ът НЕ рутира по HTTP method
+- всеки route файл сам проверява метода
+
+---
+
+## Как се добавя нов endpoint
+
+### 1) Създай route файл
+
+Endpoint:
+`/api/profile/update`
+
+Файл:
+`routes/profile/update.php`
+
+---
+
+### 2) Route skeleton
+
+```php
 <?php
 
-require_once __DIR__ . "/../../app/Core/Request.php";
-require_once __DIR__ . "/../../app/Core/Response.php";
-require_once __DIR__ . "/../../app/Models/RequestMethod.php";
+$method = RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'] ?? '');
 
-// (по желание) middleware
-require_once __DIR__ . "/../../app/Core/Session.php";
-require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
-
-requireAuth();
-
-// разреши само PUT
-if ($_SERVER["REQUEST_METHOD"] !== RequestMethod::PUT->value) {
-    Response::error("METHOD_NOT_ALLOWED", "Only PUT is allowed.", 405);
+switch ($method) {
+    case RequestMethod::POST:
+        AuthController::login();
+        break;
+    default:
+        Response::error('METHOD_NOT_FOUND', "route with this method not found", 400);
 }
+```
 
-// Тук: или директна логика, или Controller
-// ProfileController::update();
-Response::success(["message" => "OK"]);
+---
 
-3) Готово
+### 3) Готово
+Няма централна регистрация.  
+Файлът = endpoint.
 
-Няма нужда от регистрация в централен файл. Самото наличие на файла определя endpoint-а.
+---
 
+## Как се добавя нов тип заявка
 
-Как се добавя нов тип заявка
-В момента позволените методи се валидират още в index.php чрез:
-RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'])
+В `index.php`:
+`RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'])`
 
+### Пример: PATCH
 
-За да добавиш нов HTTP method (напр. PATCH):
-
-Добави case в app/Models/RequestMethod.php:
-
+В `app/Models/RequestMethod.php`:
+```php
 case PATCH = 'PATCH';
+```
 
+Ако няма case → `405` още в `index.php`.
 
-Увери се, че web server / proxy допуска PATCH (ако имаш такива ограничения).
-В съответните route файлове добави проверка за PATCH, ако държиш на ограничението по метод.
-Ако не добавиш case в enum-а, index.php ще върне 405 за този метод, преди изобщо да стигнеш до route.
+---
 
+## База данни
 
-База данни
-Конфигурация през .env
-MySQLClient чете от $_ENV:
-DB_SERVER
-DB_USER
-DB_PASSWORD
-DB_NAME
-index.php зарежда .env така:
+### Конфигурация (.env)
+- DB_SERVER=
+- DB_USER=
+- DB_PASSWORD=
+- DB_NAME=
+- DB_PORT=
 
+Зареждане:
+```php
 EnvLoader::load(__DIR__ . '/.env');
+```
 
+---
 
-Как се използва базата в code
+### Използване
 
-Стандартният шаблон (използван в AuthController) е:
-
+```php
 $db = MySQLClient::getInstance();
 $db->connect();
 $conn = $db->getConnection();
+```
 
-
-След това mysqli $conn се подава на repository методи:
+```php
 $user = UserRepository::findByEmailOrUsername($conn, $email, $username);
-Препоръчан подход
-Дръж SQL логиката в Repositories/.
-В Controllers/ само orchestrate-вай: validate → repository → response.
-Ползвай prepared statements (както е в UserRepository) за сигурност.
+```
 
+**Препоръки:**
+- SQL само в Repositories
+- Controllers orchestrate-ват
+- prepared statements (или helper като `DataBase`)
 
-Auth и сесии
-Session model
+---
 
-След login, Session::login() записва:
+## Auth и сесии
 
+След login:
+```php
 $_SESSION["user"] = [
   "id" => ...,
   "username" => ...,
   "email" => ...
 ];
+```
 
+---
 
-Защитени endpoint-и
-За endpoint-и, които изискват логнат потребител:
-В route файла извикай requireAuth() преди да върнеш каквото и да е.
-Пример за routes/auth/me.php (идея):
+## CORS
 
-<?php
-require_once __DIR__ . "/../../app/Core/Session.php";
-require_once __DIR__ . "/../../app/Core/Response.php";
-require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
-require_once __DIR__ . "/../../app/Controllers/Auth.controller.php";
-
-requireAuth();
-AuthController::me();
-
-
-CORS
-
-В index.php се include-ва:
+В `index.php`:
+```php
 require_once __DIR__ . "/config/cors.php";
-Това означава, че CORS header-ите се прилагат глобално за всички заявки още на entrypoint ниво.
+```
 
-Самият cors.php не е предоставен в качените файлове, но логиката му типично включва Access-Control-Allow-Origin, Allow-Methods, Allow-Headers и обработка на OPTIONS.
+CORS header-ите се прилагат глобално и обработват OPTIONS заявки.
