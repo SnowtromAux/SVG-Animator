@@ -16,6 +16,10 @@
 - [Архитектура и структура](#архитектура-и-структура)
 - [Поток на заявките](#поток-на-заявките)
 - [Класове и файлове](#класове-и-файлове)
+- [Middlewares](#middlewares)
+- [Models](#models)
+- [Repositories](#repositories)
+- [Controllers](#controllers)
 - [Endpoints и routing](#endpoints-и-routing)
 - [Как се добавя нов endpoint](#как-се-добавя-нов-endpoint)
 - [Как се добавя нов тип заявка](#как-се-добавя-нов-тип-заявка)
@@ -35,6 +39,8 @@ backend/
 app/
     Controllers/
         Auth.controller.php
+        Animation.controller.php
+        Controller.php
 
 Core/
     Database.php
@@ -42,6 +48,7 @@ Core/
     Response.php
     Router.php
     Session.php
+    DataBase.php
 
 Helpers/
     EnvLoader.php
@@ -56,6 +63,7 @@ Models/
 
 Repositories/
     UserRepositories.php
+    AnimationRepositories.php
 
 Services/
     empty for now
@@ -73,14 +81,14 @@ routes/
         logout.php
         me.php
         register.php
-
-
+    animation/
+        (endpoints според наличните route файлове)
 
 **Идея на структурата:**
 - `index.php` – entrypoint, bootstrap-ва средата, CORS, core класове и пуска Router-а.
 - `routes/` – реалните endpoint-и като файлове (file-based routing).
 - `Controllers/` – HTTP handlers (логика по операции).
-- `Repositories/` – комуникация с базата (SQL, prepared statements).
+- `Repositories/` – комуникация с базата (SQL, prepared statements / helper абстракции).
 - `Core/` – инфраструктура: Request, Response, Router, Session, Database.
 - `Helpers/` – utility класове (валидация, хеширане, .env loader).
 - `Middlewares/` – защити/проверки, които се викат в началото на route файлове.
@@ -109,7 +117,7 @@ routes/
 5. Controller методът:
    - чете JSON (`Request::json()`)
    - валидира (`Validator`)
-   - работи с DB чрез `MySQLClient` и `UserRepository`
+   - работи с DB чрез `MySQLClient` (+ repositories / DB helper-и)
    - връща JSON отговор чрез `Response::success()` или `Response::error()`
 
 ---
@@ -205,6 +213,61 @@ routes/
 
 ---
 
+### `app/Core/DataBase.php` (`DataBase`)
+**Цел:** helper/абстракция над `mysqli` prepared statements за да няма повтаряне на `prepare/bind/execute/close` и за по-лесно взимане на резултати.
+
+Методи:
+- `DataBase::stmt(mysqli $db, string $sql, string $types = "", array $params = []): mysqli_stmt`
+  - подготвя prepared statement
+  - ако има `$types` → bind-ва `$params`
+  - връща `mysqli_stmt` (не го изпълнява)
+
+- `DataBase::exec(mysqli $db, string $sql, string $types = "", array $params = []): int`
+  - prepare + execute
+  - връща `affected_rows`
+  - винаги затваря statement-а
+  - подходящо за UPDATE/DELETE/INSERT (без да ти трябва id)
+
+- `DataBase::insert(mysqli $db, string $sql, string $types = "", array $params = []): int`
+  - изпълнява INSERT
+  - връща `mysqli_insert_id($db)`
+  - винаги затваря statement-а
+
+- `DataBase::fetchValue(mysqli $db, string $sql, string $types = "", array $params = []): mixed`
+  - връща първата колона от първия ред или `null`
+  - изисква `mysqlnd` (ползва `mysqli_stmt_get_result`), иначе хвърля Exception
+
+- `DataBase::fetchRow(mysqli $db, string $sql, string $types = "", array $params = []): ?array`
+  - връща един ред като assoc масив или `null`
+  - изисква `mysqlnd`, иначе хвърля RuntimeException
+  - винаги затваря statement-а
+
+- `DataBase::fetchAll(mysqli $db, string $sql, string $types = "", array $params = []): array`
+  - връща всички редове като масив от assoc масиви (или `[]`)
+  - изисква `mysqlnd`, иначе хвърля RuntimeException
+  - винаги затваря statement-а
+
+- `DataBase::transaction(mysqli $db, callable $fn): mixed`
+  - begin transaction → изпълнява `$fn()` → commit
+  - при грешка → rollback и rethrow
+  - връща резултата от `$fn()`
+
+---
+
+### `app/Controllers/Controller.php` (`Controller`)
+**Цел:** базов клас за контролерите, който централизира:
+- свързване към DB
+- обработка на DB/вътрешни грешки и връщане на стандартен error response
+
+Метод:
+- `protected static function withDb(callable $fn): void`
+  - взима `MySQLClient::getInstance()`, `connect()`, `getConnection()`
+  - изпълнява `$fn($conn)`
+  - при `mysqli_sql_exception` → `Response::error("DATABASE_ERROR", ..., 500)`
+  - при `Exception` → `Response::error("INTERNAL_SERVER_ERROR", ..., 500)`
+
+---
+
 ### `app/Helpers/EnvLoader.php`
 **Цел:** зарежда `.env` файл в `$_ENV` и `putenv()`.
 
@@ -287,30 +350,117 @@ Enum за позволените HTTP методи:
 
 ---
 
+### `app/Repositories/AnimationRepositories.php` (`AnimationRepositories`)
+**Цел:** CRUD заявки за анимации и сегменти (repository слой, само DB логика).
+
+Методи:
+- `deleteAnimationById(mysqli $db, int $animationId): int`
+  - DELETE от `animation` по id
+  - връща affected rows (0 или 1)
+
+- `createAnimation(mysqli $db, int $userId, array|string $settings, string $svgText, string $name): int`
+  - `$settings` → JSON string (ако е array → `json_encode`)
+  - INSERT в `animation` (user_id, name, starting_svg, animation_settings)
+  - връща новото id
+
+- `getAnimationUserId(mysqli $db, int $animationId): ?int`
+  - връща `user_id` за даден `animationId` или `null`
+
+- `updateAnimation(mysqli $db, int $animationId, string $animationSettings, string $animationName, int $totalDuration, array $animationSegments): bool`
+  - транзакционно:
+    - UPDATE на `animation` (settings, name, duration)
+    - DELETE на сегментите за animation_id
+    - INSERT на сегментите наново
+  - връща `true` ако транзакцията мине без exception
+
+- `getAnimationById(mysqli $db, int $animationId): ?array`
+  - чете `animation` (id, name, starting_svg, animation_settings, duration)
+  - ако няма → `null`
+  - чете сегменти от `animation_segment` (ORDER BY step ASC)
+  - каства числови полета към `int`
+  - добавя сегментите в `animation["animation_segments"]`
+
+- `getAnimationsByUser(mysqli $db, int $userId, int $page): array`
+  - pagination:
+    - `perPage` от `$_ENV["NUM_OF_ANIMATIONS_PER_PAGE"]` (default 20)
+    - валидира `page`
+    - брои total + смята totalPages
+    - връща ids за страницата (ORDER BY id ASC, LIMIT/OFFSET)
+  - връща структура:
+    - успех: `["ok"=>true, "items"=>[ids...], "numOfPages"=>totalPages]`
+    - проблем: `["ok"=>false, "error"=>"...", "items"=>[]]`
+
+---
+
 ## Controllers
 
 ### `app/Controllers/Auth.controller.php` (`AuthController`)
-**Цел:** auth операции.
+**Цел:** регистрация/логин/логаут и информация за текущия потребител.
 
 #### `register()`
-- чете JSON: email, username, password
-- валидира чрез Validator
-- проверява дали user съществува
-- създава user със hashed password
-- връща `201 CREATED`
+- чете JSON body: email, username, password
+- валидира:
+  - email → `Validator::email`
+  - username → `Validator::username`
+  - password → `Validator::password`
+- проверява дали има съществуващ потребител по email или username (`UserRepository::findByEmailOrUsername`)
+- ако няма → създава потребител (`UserRepository::create`) с хеширана парола (`PasswordHasher::hash`)
+- връща success (201) с новото user id
 
 #### `login()`
-- чете JSON: login (email или username) и password
-- намира user
+- чете JSON body: login (email или username) и password
+- търси потребител (`findByEmailOrUsername`)
 - проверява паролата (`PasswordHasher::verify`)
-- `Session::login()`
+- ако е валидно → `Session::login(id, username, email)`
+- връща success или error при грешни данни
 
 #### `logout()`
 - `Session::logout()`
+- връща success message
 
 #### `me()`
-- връща `$_SESSION["user"]`
+- връща информацията за логнатия потребител от `$_SESSION["user"]`
 - endpoint-ът трябва да е защитен с `requireAuth()`
+
+---
+
+### `app/Controllers/Animation.controller.php` (`AnimationController`)
+**Цел:** операции за анимации (валидира вход/достъп и ползва repository метода за DB).
+
+#### `createAnimation(): void`
+- взима текущия user id от `Session::user()["id"]`
+- чете JSON body: `svg_text`, `settings`, `name`
+- създава анимация чрез `AnimationRepositories::createAnimation`
+- връща success с новото id или error
+
+#### `saveAnimation(): void`
+- чете JSON body:
+  - `animation_id`, `animation_settings`, `animation_name`, `animation_segments`
+- проверява дали анимацията съществува и дали потребителят е собственик
+- изчислява totalDuration като сума на `duration` за сегментите
+- обновява анимацията + сегментите чрез `AnimationRepositories::updateAnimation` (транзакционно)
+- връща success/error според резултата
+
+#### `getAnimation(): void`
+- чете route param `animation_id`
+- ако липсва → `Response::error("MISSING_ID", ...)`
+- проверява owner id (`getAnimationUserId`) и достъп (`Validator::checkUserId`)
+- връща пълната анимация (`getAnimationById`) чрез `Response::success`
+
+#### `getAllAnimations(): void`
+- чете `page` от query/params (default 1)
+- взима текущия user id
+- вика `getAnimationsByUser`
+  - ако `ok=false` → `Response::error(..., 404)`
+  - ако `ok=true` → `Response::success(["animation_ids"=>..., "numOfPages"=>...])`
+
+#### `deleteAnimation(): void`
+- чете JSON body и взима `animation_id`
+- проверява дали съществува (`getAnimationUserId`) и достъп (`Validator::checkUserId`)
+- изтрива (`deleteAnimationById`)
+- връща:
+  - success ако `affectedRows === 1`
+  - error ако `affectedRows === 0` или неочакван резултат
 
 ---
 
@@ -371,7 +521,7 @@ Response::success(["message" => "OK"]);
 
 ---
 
-## Как се добавя нов HTTP метод
+## Как се добавя нов тип заявка
 
 В `index.php`:
 `RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'])`
@@ -417,7 +567,7 @@ $user = UserRepository::findByEmailOrUsername($conn, $email, $username);
 **Препоръки:**
 - SQL само в Repositories
 - Controllers orchestrate-ват
-- prepared statements
+- prepared statements (или helper като `DataBase`)
 
 ---
 
@@ -430,24 +580,6 @@ $_SESSION["user"] = [
   "username" => ...,
   "email" => ...
 ];
-```
-
----
-
-## Защитени endpoint-и
-
-Извиквай `requireAuth()` в началото.
-
-Пример `routes/auth/me.php`:
-```php
-<?php
-require_once __DIR__ . "/../../app/Core/Session.php";
-require_once __DIR__ . "/../../app/Core/Response.php";
-require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
-require_once __DIR__ . "/../../app/Controllers/Auth.controller.php";
-
-requireAuth();
-AuthController::me();
 ```
 
 ---
