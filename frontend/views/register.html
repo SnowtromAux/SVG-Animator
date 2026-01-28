@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SVG Animator - Регистрация</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="../css/views/register.css">
+</head>
+<body>
+  <!-- Animated Background -->
+  <div class="background">
+    <canvas id="particleCanvas"></canvas>
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
+  <div class="page-container">
+    <!-- Register Card with Glassmorphism -->
+    <div class="card register-card">
+      <div class="card-glow"></div>
+      
+      <!-- Logo Section -->
+      <div class="logo-section">
+        <div class="logo">
+          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="56" height="56" rx="16" fill="url(#logoGradient)"/>
+            <path d="M16 28L24 20L32 28L40 20" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <animate attributeName="d" dur="3s" repeatCount="indefinite" 
+                values="M16 28L24 20L32 28L40 20;M16 24L24 32L32 24L40 32;M16 28L24 20L32 28L40 20"/>
+            </path>
+            <path d="M16 36L24 28L32 36L40 28" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
+              <animate attributeName="d" dur="3s" repeatCount="indefinite" 
+                values="M16 36L24 28L32 36L40 28;M16 32L24 40L32 32L40 40;M16 36L24 28L32 36L40 28"/>
+            </path>
+            <defs>
+              <linearGradient id="logoGradient" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#6366F1"/>
+                <stop offset="1" stop-color="#8B5CF6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1 class="app-name">SVG Animator</h1>
+        <p class="app-tagline">Създай своя акаунт</p>
+      </div>
+
+      <!-- Register Form -->
+      <form id="registerForm" class="form">
+        <div class="form-group">
+          <label for="username">Потребителско име</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 10C12.0711 10 13.75 8.32107 13.75 6.25C13.75 4.17893 12.0711 2.5 10 2.5C7.92893 2.5 6.25 4.17893 6.25 6.25C6.25 8.32107 7.92893 10 10 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M17.5 17.5C17.5 14.7386 14.1421 12.5 10 12.5C5.85786 12.5 2.5 14.7386 2.5 17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <input 
+              type="text" 
+              id="username" 
+              name="username" 
+              placeholder="Изберете потребителско име"
+              required
+              autocomplete="username"
+            >
+            <div class="input-focus-effect"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Имейл адрес</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <rect x="2.5" y="4.16667" width="15" height="11.6667" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M2.5 6.66667L10 11.6667L17.5 6.66667" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <input 
+              type="email" 
+              id="email" 
+              name="email" 
+              placeholder="Въведете вашия имейл"
+              required
+              autocomplete="email"
+            >
+            <div class="input-focus-effect"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Парола</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <rect x="3.75" y="8.75" width="12.5" height="8.75" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6.25 8.75V6.25C6.25 4.17893 7.92893 2.5 10 2.5C12.0711 2.5 13.75 4.17893 13.75 6.25V8.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="10" cy="13.125" r="1.25" fill="currentColor"/>
+            </svg>
+            <input 
+              type="password" 
+              id="password" 
+              name="password" 
+              placeholder="Създайте парола"
+              required
+              autocomplete="new-password"
+            >
+            <button type="button" class="toggle-password" aria-label="Покажи парола" data-target="password">
+              <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M2.5 10C2.5 10 5 4.16667 10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 15 15.8333 10 15.8333C5 15.8333 2.5 10 2.5 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+              <svg class="eye-off-icon hidden" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M2.5 2.5L17.5 17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M8.5 8.5C7.67157 9.32843 7.67157 10.6716 8.5 11.5C9.32843 12.3284 10.6716 12.3284 11.5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M4.16667 5.83333C3.16667 6.83333 2.5 8.16667 2.5 10C2.5 10 5 15.8333 10 15.8333C11.5 15.8333 12.8333 15.3333 14 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 17.1667 10.8333 16.5 11.8333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="input-focus-effect"></div>
+          </div>
+          <!-- Password Strength Indicator -->
+          <div class="password-strength">
+            <div class="strength-bar">
+              <div class="strength-fill" id="strengthFill"></div>
+            </div>
+            <span class="strength-text" id="strengthText">Сила на паролата</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword">Потвърдете паролата</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <rect x="3.75" y="8.75" width="12.5" height="8.75" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M6.25 8.75V6.25C6.25 4.17893 7.92893 2.5 10 2.5C12.0711 2.5 13.75 4.17893 13.75 6.25V8.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M8 13L9.5 14.5L12.5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <input 
+              type="password" 
+              id="confirmPassword" 
+              name="confirmPassword" 
+              placeholder="Повторете паролата"
+              required
+              autocomplete="new-password"
+            >
+            <button type="button" class="toggle-password" aria-label="Покажи парола" data-target="confirmPassword">
+              <svg class="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M2.5 10C2.5 10 5 4.16667 10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 15 15.8333 10 15.8333C5 15.8333 2.5 10 2.5 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+              <svg class="eye-off-icon hidden" width="20" height="20" viewBox="0 0 20 20" fill="none">
+                <path d="M2.5 2.5L17.5 17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M8.5 8.5C7.67157 9.32843 7.67157 10.6716 8.5 11.5C9.32843 12.3284 10.6716 12.3284 11.5 11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M4.16667 5.83333C3.16667 6.83333 2.5 8.16667 2.5 10C2.5 10 5 15.8333 10 15.8333C11.5 15.8333 12.8333 15.3333 14 14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M10 4.16667C15 4.16667 17.5 10 17.5 10C17.5 10 17.1667 10.8333 16.5 11.8333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="input-focus-effect"></div>
+          </div>
+        </div>
+
+        <!-- Terms Checkbox -->
+        <div class="checkbox-group">
+          <label class="checkbox-wrapper">
+            <input type="checkbox" id="terms" name="terms" required>
+            <span class="checkbox-custom">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span class="checkbox-label">Приемам <a href="#">условията за ползване</a></span>
+          </label>
+        </div>
+
+        <button type="submit" class="submit-btn">
+          <span class="btn-text">Създай акаунт</span>
+          <span class="btn-icon">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M10 4.16667V15.8333" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4.16667 10H15.8333" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="btn-loader"></span>
+        </button>
+      </form>
+
+      <!-- Login Link -->
+      <div class="link-section">
+        <span>Вече имате акаунт?</span>
+        <a href="login.html">Влезте тук</a>
+      </div>
+
+      <!-- Decorative Elements -->
+      <div class="card-corner corner-tl"></div>
+      <div class="card-corner corner-tr"></div>
+      <div class="card-corner corner-bl"></div>
+      <div class="card-corner corner-br"></div>
+    </div>
+  </div>
+
+  <script src="../js/views/register.js"></script>
+</body>
+</html>

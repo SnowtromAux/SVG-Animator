@@ -1,0 +1,108 @@
+/* Register Card */
+.register-card {
+  max-width: 480px;
+}
+
+.register-card .form {
+  gap: 1.25rem;
+}
+
+/* ===== Password Strength Indicator ===== */
+.password-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  width: 0;
+  background: var(--text-muted);
+  border-radius: 2px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.strength-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.3s ease;
+}
+
+/* ===== Checkbox Group ===== */
+.checkbox-group {
+  margin-top: 0.5rem;
+}
+
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: transparent;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.checkbox-wrapper:hover .checkbox-custom {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.checkbox-wrapper input:checked + .checkbox-custom {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: white;
+}
+
+.checkbox-wrapper input:focus-visible + .checkbox-custom {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.checkbox-wrapper.error .checkbox-custom {
+  border-color: var(--error);
+  animation: shake 0.5s ease;
+}
+
+.checkbox-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.checkbox-label a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.checkbox-label a:hover {
+  color: var(--accent-secondary);
+  text-decoration: underline;
+}
