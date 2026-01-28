@@ -6,8 +6,10 @@ require_once __DIR__ . "/../Repositories/AnimationRepositories.php";
 require_once __DIR__ . "/../Helpers/Validator.php";
 require_once __DIR__ . "/Controller.php";
 
+/// AnimationController е клас съдържащ имплементация на контролерите за операциите върху анимации
 class AnimationController extends Controller
 {
+    // конролер за изтриване на съществуваща анимация ако този който се опита да я изтрие е собственика
     public static function deleteAnimation(): void
     {
         self::withDb(
@@ -47,6 +49,7 @@ class AnimationController extends Controller
         );
     }
 
+    /// контролер за създаване на нова анимация 
     public static function createAnimation(): void
     {
         self::withDb(
@@ -72,6 +75,8 @@ class AnimationController extends Controller
         );
     }
 
+    // контролер за запазване на анимация ако съществува и този 
+    // който се опитва да я запази е собственик 
     public static function saveAnimation(): void
     {
         self::withDb(
@@ -121,6 +126,7 @@ class AnimationController extends Controller
         );
     }
 
+    /// контролер който връща цялата анимация
     public static function getAnimation(): void
     {
         self::withDb(
@@ -146,6 +152,7 @@ class AnimationController extends Controller
         );
     }
 
+    /// контролер който връща id-тата на всички анимации на дадена страница
     public static function getAllAnimations(): void
     {
         self::withDb(function ($conn) {

@@ -7,8 +7,10 @@ require_once __DIR__ . "/../Helpers/Validator.php";
 require_once __DIR__ . "/../Helpers/PasswordHasher.php";
 require_once __DIR__ . "/Controller.php";
 
+/// AuthController е клас съдържащ имплементация на контролерите за аутентикация
 class AuthController extends Controller
 {
+    /// контролер за регистрация на потребител
     public static function register(): void
     {
         self::withDb(
@@ -56,7 +58,7 @@ class AuthController extends Controller
         );
     }
 
-
+    // контроллер за логин на съществуващ потребител
     public static function login(): void
     {
         self::withDb(
@@ -81,12 +83,14 @@ class AuthController extends Controller
         );
     }
 
+    // контролер за logout на log-нат потребител
     public static function logout(): void
     {
         Session::logout();
         Response::success(["message" => "Изходът е успешен."]);
     }
 
+    /// контролер който връща информация за логнатия потребител
     public static function me(): void
     {
         $user = $_SESSION["user"];

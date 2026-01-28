@@ -233,6 +233,8 @@ routes/
 
 ---
 
+## Middlewares
+
 ### `app/Middlewares/requireAuth.php`
 **Цел:** middleware за защитени endpoint-и.
 
@@ -240,164 +242,204 @@ routes/
 - проверява `$_SESSION["user"]`
 - ако няма user → `Response::error("UNAUTHORIZED", "Не сте логнати.", 401)`
 
-Използване: в началото на route файл.
+**Използване:** в началото на route файл.
+
 ```php
 require_once __DIR__ . "/../../app/Core/Session.php";
 require_once __DIR__ . "/../../app/Core/Response.php";
 require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
 
 requireAuth();
+```
 
+---
 
-app/Models/RequestMethod.php
+## Models
+
+### `app/Models/RequestMethod.php`
 Enum за позволените HTTP методи:
-GET, POST, PUT, DELETE
-Използва се в index.php, за да се режат непозволени методи с 405.
+- GET
+- POST
+- PUT
+- DELETE
 
+**Използване:**
+- използва се в `index.php`
+- валидира HTTP метода
+- при непозволен метод връща `405 METHOD_NOT_ALLOWED`
 
-app/Repositories/UserRepositories.php (UserRepository)
-Цел: всички DB операции, свързани с user.
-Методи:
-findByEmailOrUsername(mysqli $db, string $email, string $username): ?array
-SELECT id, email, username, password от таблица user
-create(mysqli $db, string $username, string $email, string $password): int
-INSERT в user, връща insert_id
-Забележка: използва mysqli_prepare и bind параметри → безопасно срещу SQL injection.
+---
 
+## Repositories
 
-app/Controllers/Auth.controller.php (AuthController)
-Цел: auth операции.
-Методи:
-register()
-чете JSON: email, username, password
-валидира с Validator
-проверява дали user съществува (UserRepository::findByEmailOrUsername)
-създава user (UserRepository::create) със hashed password
-връща 201 при успех
-login()
-чете JSON: login (email или username) и password
-намира user (по email/username)
-проверява паролата (PasswordHasher::verify)
-Session::login(...)
-logout()
-Session::logout()
-me()
-връща $_SESSION["user"]
-(на практика този endpoint трябва да е защитен с requireAuth() в route файла)
+### `app/Repositories/UserRepositories.php` (`UserRepository`)
+**Цел:** всички DB операции, свързани с user.
 
+**Методи:**
+- `findByEmailOrUsername(mysqli $db, string $email, string $username): ?array`  
+  SELECT id, email, username, password FROM user
+- `create(mysqli $db, string $username, string $email, string $password): int`  
+  INSERT INTO user, връща insert_id
 
-Endpoints и routing
-Router-ът работи по файловата система:
-GET/POST ... /<BASE_PATH>/auth/login → routes/auth/login.php
-... /<BASE_PATH>/auth/register → routes/auth/register.php
-... /<BASE_PATH>/auth/logout → routes/auth/logout.php
-... /<BASE_PATH>/auth/me → routes/auth/me.php
+**Забележка:**
+- използва `mysqli_prepare` и `bind_param`
+- защита срещу SQL injection
 
-Важно: Router-ът сам по себе си не рутира по HTTP method. Един route файл отговаря за конкретния path; вътре в него вие решавате дали приемате GET/POST и т.н.
+---
 
+## Controllers
 
-Как се добавя нов endpoint
-1) Създай route файл в routes/
+### `app/Controllers/Auth.controller.php` (`AuthController`)
+**Цел:** auth операции.
 
-Пример: искаме endpoint:
-/api/profile/update
+#### `register()`
+- чете JSON: email, username, password
+- валидира чрез Validator
+- проверява дали user съществува
+- създава user със hashed password
+- връща `201 CREATED`
 
-Създаваме:
-routes/profile/update.php
+#### `login()`
+- чете JSON: login (email или username) и password
+- намира user
+- проверява паролата (`PasswordHasher::verify`)
+- `Session::login()`
 
-2) В route файла: включи нужните зависимости и извикай handler
+#### `logout()`
+- `Session::logout()`
 
-Примерен skeleton:
+#### `me()`
+- връща `$_SESSION["user"]`
+- endpoint-ът трябва да е защитен с `requireAuth()`
 
+---
+
+## Endpoints и routing
+
+Router-ът работи file-based.
+
+Примери:
+- `/auth/login` → `routes/auth/login.php`
+- `/auth/register` → `routes/auth/register.php`
+- `/auth/logout` → `routes/auth/logout.php`
+- `/auth/me` → `routes/auth/me.php`
+
+**Важно:**
+- Router-ът НЕ рутира по HTTP method
+- всеки route файл сам проверява метода
+
+---
+
+## Как се добавя нов endpoint
+
+### 1) Създай route файл
+
+Endpoint:
+`/api/profile/update`
+
+Файл:
+`routes/profile/update.php`
+
+---
+
+### 2) Route skeleton
+
+```php
 <?php
 
 require_once __DIR__ . "/../../app/Core/Request.php";
 require_once __DIR__ . "/../../app/Core/Response.php";
 require_once __DIR__ . "/../../app/Models/RequestMethod.php";
 
-// (по желание) middleware
 require_once __DIR__ . "/../../app/Core/Session.php";
 require_once __DIR__ . "/../../app/Middlewares/requireAuth.php";
 
 requireAuth();
 
-// разреши само PUT
 if ($_SERVER["REQUEST_METHOD"] !== RequestMethod::PUT->value) {
     Response::error("METHOD_NOT_ALLOWED", "Only PUT is allowed.", 405);
 }
 
-// Тук: или директна логика, или Controller
-// ProfileController::update();
 Response::success(["message" => "OK"]);
+```
 
-3) Готово
+---
 
-Няма нужда от регистрация в централен файл. Самото наличие на файла определя endpoint-а.
+### 3) Готово
+Няма централна регистрация.  
+Файлът = endpoint.
 
+---
 
-Как се добавя нов тип заявка
-В момента позволените методи се валидират още в index.php чрез:
-RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'])
+## Как се добавя нов HTTP метод
 
+В `index.php`:
+`RequestMethod::tryFrom($_SERVER['REQUEST_METHOD'])`
 
-За да добавиш нов HTTP method (напр. PATCH):
+### Пример: PATCH
 
-Добави case в app/Models/RequestMethod.php:
-
+В `app/Models/RequestMethod.php`:
+```php
 case PATCH = 'PATCH';
+```
 
+Ако няма case → `405` още в `index.php`.
 
-Увери се, че web server / proxy допуска PATCH (ако имаш такива ограничения).
-В съответните route файлове добави проверка за PATCH, ако държиш на ограничението по метод.
-Ако не добавиш case в enum-а, index.php ще върне 405 за този метод, преди изобщо да стигнеш до route.
+---
 
+## База данни
 
-База данни
-Конфигурация през .env
-MySQLClient чете от $_ENV:
-DB_SERVER
-DB_USER
-DB_PASSWORD
-DB_NAME
-index.php зарежда .env така:
+### Конфигурация (.env)
+- DB_SERVER
+- DB_USER
+- DB_PASSWORD
+- DB_NAME
 
+Зареждане:
+```php
 EnvLoader::load(__DIR__ . '/.env');
+```
 
+---
 
-Как се използва базата в code
+### Използване
 
-Стандартният шаблон (използван в AuthController) е:
-
+```php
 $db = MySQLClient::getInstance();
 $db->connect();
 $conn = $db->getConnection();
+```
 
-
-След това mysqli $conn се подава на repository методи:
+```php
 $user = UserRepository::findByEmailOrUsername($conn, $email, $username);
-Препоръчан подход
-Дръж SQL логиката в Repositories/.
-В Controllers/ само orchestrate-вай: validate → repository → response.
-Ползвай prepared statements (както е в UserRepository) за сигурност.
+```
 
+**Препоръки:**
+- SQL само в Repositories
+- Controllers orchestrate-ват
+- prepared statements
 
-Auth и сесии
-Session model
+---
 
-След login, Session::login() записва:
+## Auth и сесии
 
+След login:
+```php
 $_SESSION["user"] = [
   "id" => ...,
   "username" => ...,
   "email" => ...
 ];
+```
 
+---
 
-Защитени endpoint-и
-За endpoint-и, които изискват логнат потребител:
-В route файла извикай requireAuth() преди да върнеш каквото и да е.
-Пример за routes/auth/me.php (идея):
+## Защитени endpoint-и
 
+Извиквай `requireAuth()` в началото.
+
+Пример `routes/auth/me.php`:
+```php
 <?php
 require_once __DIR__ . "/../../app/Core/Session.php";
 require_once __DIR__ . "/../../app/Core/Response.php";
@@ -406,12 +448,15 @@ require_once __DIR__ . "/../../app/Controllers/Auth.controller.php";
 
 requireAuth();
 AuthController::me();
+```
 
+---
 
-CORS
+## CORS
 
-В index.php се include-ва:
+В `index.php`:
+```php
 require_once __DIR__ . "/config/cors.php";
-Това означава, че CORS header-ите се прилагат глобално за всички заявки още на entrypoint ниво.
+```
 
-Самият cors.php не е предоставен в качените файлове, но логиката му типично включва Access-Control-Allow-Origin, Allow-Methods, Allow-Headers и обработка на OPTIONS.
+CORS header-ите се прилагат глобално и обработват OPTIONS заявки.
