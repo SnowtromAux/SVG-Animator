@@ -4,19 +4,19 @@ require_once __DIR__ . "/../Helpers/DataBase.php";
 
 class PostRepositories
 {
-    public static function createPost(mysqli $db, int $userId, int $animationId): int
+    public static function createPost(mysqli $db, int $userId, int $animationId, string $description): int
     {
         $sql = "INSERT INTO post 
-            (animation_id, user_id, created_at)
-            VALUES (?, ?, ?)";
+            (animation_id, user_id, created_at, description)
+            VALUES (?, ?, ?, ?)";
 
         $createdAt = date('Y-m-d');
 
         $insertedId = DataBase::insert(
             $db,
             $sql,
-            "iis",
-            [$animationId, $userId, $createdAt]
+            "iiss",
+            [$animationId, $userId, $createdAt, $description]
         );
 
         return $insertedId;

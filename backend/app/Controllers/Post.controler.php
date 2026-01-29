@@ -12,6 +12,7 @@ class PostController extends Controller
         self::withDb(
             function ($conn) {
                 $animationId = Request::json()['animation_id'] ?? null;
+                $description = Request::json()['description'] ?? '';
                 $userId = Session::user()["id"];
 
                 if (!$animationId) {
@@ -30,7 +31,7 @@ class PostController extends Controller
                     return;
                 }
 
-                $result = PostRepositories::createPost($conn, $userId, $animationId);
+                $result = PostRepositories::createPost($conn, $userId, $animationId, $description);
 
                 if (!$result) {
                     Response::error("DATABASE_FAIL", "неуспяхме да създаде нов пост");
