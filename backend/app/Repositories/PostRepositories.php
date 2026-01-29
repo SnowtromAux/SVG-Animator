@@ -48,4 +48,41 @@ class PostRepositories
             [$postId]
         );
     }
+
+    public static function likePost(mysqli $db, int $postId, int $userId): int
+    {
+        return DataBase::transaction(
+            $db,
+            function () use ($db, $postId, $userId): int {
+
+                $sqlCheck = "SELECT id, type
+                    FROM reaction
+                    WHERE post_id = ? AND user_id = ?
+                    LIMIT 1
+                    FOR UPDATE";
+
+                $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
+
+                if ($row !== null) {
+                    if ($row['type'] === 'like') {
+                        return 0;
+                    }
+
+                    $sqlUpdate = "UPDATE reaction 
+                              SET type = ? 
+                              WHERE id = ?";
+
+                    return DataBase::exec($db, $sqlUpdate, "si", ['like', (int)$row['id']]);
+                }
+
+                $sqlInsert = "INSERT INTO reaction 
+                         (post_id, user_id, type)
+                         VALUES (?, ?, ?)";
+
+                DataBase::insert($db, $sqlInsert, "iis", [$postId, $userId, 'like']);
+
+                return 1;
+            }
+        );
+    }
 }

@@ -85,4 +85,25 @@ class PostController extends Controller
             }
         );
     }
+
+    public static function likePost(): void
+    {
+        self::withDb(
+            function ($conn) {
+                $postId = Request::json()["post_id"] ?? null;
+                $userId = Session::user()["id"];
+
+                if (!$postId) {
+                    Response::error("MISSING_ID", "не е предоставено id на пост");
+                    return;
+                }
+
+                $likedPost = PostRepositories::likePost($conn, $postId, $userId);
+
+                Response::success([
+                    "message" => ($likedPost? "поста беше харесан успешно" : "поста вече е харесан") 
+                ], 200);
+            }
+        );
+    }
 }
