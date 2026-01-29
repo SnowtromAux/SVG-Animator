@@ -35,4 +35,15 @@ class UserRepository
             [$username, $email, $password]
         );
     }
+
+    public static function getUsernameById(mysqli $db, int $userId): ?string
+    {
+        $sql = "SELECT username
+            FROM user
+            WHERE id = ?
+            LIMIT 1";
+
+        $username = DataBase::fetchValue($db, $sql, "i", [$userId]);
+        return $username !== null ? (string)$username : null;
+    }
 }

@@ -168,7 +168,7 @@ class AnimationRepositories
         $countSql = "SELECT COUNT(*) AS total 
                      FROM animation 
                      WHERE user_id = ?";
-        
+
         $countRow = DataBase::fetchRow($db, $countSql, "i", [$userId]);
         $totalItems = (int)($countRow["total"] ?? 0);
 
@@ -200,5 +200,15 @@ class AnimationRepositories
             "items" => $ids,
             "numOfPages" => $totalPages
         ];
+    }
+
+    public static function getAnimationPreviewById(mysqli $db, int $animationId): ?array
+    {
+        $sql = "SELECT name, starting_svg
+            FROM animation
+            WHERE id = ?
+            LIMIT 1";
+
+        return DataBase::fetchRow($db, $sql, "i", [$animationId]);
     }
 }

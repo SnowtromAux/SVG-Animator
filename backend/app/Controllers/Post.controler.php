@@ -3,6 +3,7 @@
 require_once __DIR__ . "/Controller.php";
 require_once __DIR__ . "/../Repositories/PostRepositories.php";
 require_once __DIR__ . "/../Repositories/AnimationRepositories.php";
+require_once __DIR__ . "/../Repositories/UserRepositories.php";
 require_once __DIR__ . "/../Helpers/Validator.php";
 
 class PostController extends Controller
@@ -102,7 +103,7 @@ class PostController extends Controller
                 $likedPost = PostRepositories::likePost($conn, $postId, $userId);
 
                 Response::success([
-                    "message" => ($likedPost? "поста беше харесан успешно" : "поста вече е харесан") 
+                    "message" => ($likedPost ? "поста беше харесан успешно" : "поста вече е харесан")
                 ], 200);
             }
         );
@@ -123,9 +124,31 @@ class PostController extends Controller
                 $likedPost = PostRepositories::dislikePost($conn, $postId, $userId);
 
                 Response::success([
-                    "message" => ($likedPost? "поста беше нехаресан успешно" : "поста вече е нехаресван") 
+                    "message" => ($likedPost ? "поста беше нехаресан успешно" : "поста вече е нехаресван")
                 ], 200);
             }
         );
+    }
+
+    public static function getAllPosts(): void
+    {
+        self::withDb(function (mysqli $conn) {
+            $currentPostId = Request::param("current_post_id");
+            $nextPosts = PostRepositories::getNextPosts($conn, $currentPostId);
+
+            foreach ($nextPosts as &$post) {
+                $animationId = (int)$post['animation_id'];
+                $animation = AnimationRepositories::getAnimationPreviewById($conn, $animationId);
+
+                $post['animation'] = $animation;
+                $userId = (int)$post['user_id'];
+                $post['username'] = UserRepository::getUsernameById($conn, $userId);
+            }
+            unset($post);
+
+            Response::success([
+                "nextPosts" => $nextPosts
+            ], 200);
+        });
     }
 }

@@ -7,16 +7,14 @@ class PostRepositories
     public static function createPost(mysqli $db, int $userId, int $animationId, string $description): int
     {
         $sql = "INSERT INTO post 
-            (animation_id, user_id, created_at, description)
-            VALUES (?, ?, ?, ?)";
-
-        $createdAt = date('Y-m-d');
+            (animation_id, user_id, description)
+            VALUES (?, ?, ?)";
 
         $insertedId = DataBase::insert(
             $db,
             $sql,
-            "iiss",
-            [$animationId, $userId, $createdAt, $description]
+            "iis",
+            [$animationId, $userId, $description]
         );
 
         return $insertedId;
@@ -123,5 +121,46 @@ class PostRepositories
 
             return 1;
         });
+    }
+
+    public static function getNextPosts(mysqli $db, ?int $currentPostId): array
+    {
+        if ($currentPostId === null) {
+            $sql = "SELECT 
+                    id,
+                    animation_id,
+                    user_id,
+                    description,
+                    likes_count,
+                    dislikes_count,
+                    created_at
+                FROM post
+                ORDER BY created_at ASC
+                LIMIT 20";
+
+            return DataBase::fetchAll($db, $sql);
+        }
+
+        $sqlCreatedAt = "SELECT created_at FROM post WHERE id = ?";
+        $createdAt = DataBase::fetchValue($db, $sqlCreatedAt, "i", [$currentPostId]);
+
+        if ($createdAt === null) {
+            return [];
+        }
+
+        $sql = "SELECT 
+                id,
+                animation_id,
+                user_id,
+                description,
+                likes_count,
+                dislikes_count,
+                created_at
+            FROM post
+            WHERE created_at > ?
+            ORDER BY created_at ASC
+            LIMIT 20";
+
+        return DataBase::fetchAll($db, $sql, "s", [$createdAt]);
     }
 }
