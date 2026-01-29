@@ -106,4 +106,25 @@ class PostController extends Controller
             }
         );
     }
+
+    public static function dislikePost(): void
+    {
+        self::withDb(
+            function ($conn) {
+                $postId = Request::json()["post_id"] ?? null;
+                $userId = Session::user()["id"];
+
+                if (!$postId) {
+                    Response::error("MISSING_ID", "не е предоставено id на пост");
+                    return;
+                }
+
+                $likedPost = PostRepositories::dislikePost($conn, $postId, $userId);
+
+                Response::success([
+                    "message" => ($likedPost? "поста беше нехаресан успешно" : "поста вече е нехаресван") 
+                ], 200);
+            }
+        );
+    }
 }

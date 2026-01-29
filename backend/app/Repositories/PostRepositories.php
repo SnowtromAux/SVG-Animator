@@ -85,4 +85,43 @@ class PostRepositories
             }
         );
     }
+
+    public static function dislikePost(mysqli $db, int $postId, int $userId): int
+    {
+        return DataBase::transaction($db, function () use ($db, $postId, $userId): int {
+
+            $sqlCheck = "SELECT id, type
+                     FROM reaction
+                     WHERE post_id = ? AND user_id = ?
+                     LIMIT 1
+                     FOR UPDATE";
+
+            $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
+
+            if ($row !== null) {
+                if ($row['type'] === 'dislike') {
+                    return 0;
+                }
+
+                $sqlUpdate = "UPDATE reaction SET type = ? WHERE id = ?";
+                return DataBase::exec(
+                    $db,
+                    $sqlUpdate,
+                    "si",
+                    ['dislike', (int)$row['id']]
+                );
+            }
+
+            $sqlInsert = "INSERT INTO reaction (post_id, user_id, type)
+                      VALUES (?, ?, ?)";
+            DataBase::insert(
+                $db,
+                $sqlInsert,
+                "iis",
+                [$postId, $userId, 'dislike']
+            );
+
+            return 1;
+        });
+    }
 }
