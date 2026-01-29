@@ -7,7 +7,6 @@ require_once __DIR__ . "/../Helpers/Validator.php";
 
 class PostController extends Controller
 {
-
     public static function createPost(): void
     {
         self::withDb(
@@ -31,7 +30,7 @@ class PostController extends Controller
                     return;
                 }
 
-                $result = PostRepository::createPost($conn, $userId, $animationId);
+                $result = PostRepositories::createPost($conn, $userId, $animationId);
 
                 if (!$result) {
                     Response::error("DATABASE_FAIL", "неуспяхме да създаде нов пост");
@@ -39,6 +38,49 @@ class PostController extends Controller
                     Response::success([
                         "post_id" => $result
                     ], 200);
+                }
+            }
+        );
+    }
+
+    public static function deletePost(): void
+    {
+        self::withDb(
+            function ($conn) {
+                $postId = Request::json()['post_id'] ?? null;
+
+                if (!$postId) {
+                    Response::error("MISSING_ID", "не е предоставено id на пост");
+                    return;
+                }
+
+                $postUserId = PostRepositories::getPostUserId($conn, $postId);
+                if ($postUserId === null) {
+                    Response::error("ANIMATION_NOT_FOUND", "не може да открием пост с това id", 401);
+                    return;
+                }
+
+                if (!Validator::checkUserId($postUserId)) {
+                    Response::error("FORBIDDEN", "не може да изтриете пост който не е ваш", 403);
+                    return;
+                }
+
+                $affectedRows = PostRepositories::deletePost($conn, $postId);
+
+                if ($affectedRows === 1) {
+                    Response::success([
+                        "message" => "Успешно изтрит пост",
+                    ], 200);
+                } else if ($affectedRows === 0) {
+                    Response::error(
+                        "DELETION_FAILED",
+                        "Не успяхте да изтриете поста"
+                    );
+                } else {
+                    Response::error(
+                        "DELETION_PROBLEM",
+                        "Възникна неочаквана грешка"
+                    );
                 }
             }
         );

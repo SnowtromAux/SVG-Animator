@@ -2,7 +2,7 @@
 
 require_once __DIR__ . "/../Helpers/DataBase.php";
 
-class PostRepository
+class PostRepositories
 {
     public static function createPost(mysqli $db, int $userId, int $animationId): int
     {
@@ -18,7 +18,34 @@ class PostRepository
             "iis",
             [$animationId, $userId, $createdAt]
         );
-        
+
         return $insertedId;
+    }
+
+    public static function getPostUserId(mysqli $db, int $postId): ?int
+    {
+        $sql = "SELECT user_id FROM post WHERE id = ?;";
+
+        $val = DataBase::fetchValue(
+            $db,
+            $sql,
+            "i",
+            [$postId]
+        );
+
+        return $val === null ? null : (int)$val;
+    }
+
+    public static function deletePost(mysqli $db, int $postId): int
+    {
+        $sql = "DELETE FROM post
+                WHERE post.id = ?";
+
+        return DataBase::exec(
+            $db,
+            $sql,
+            "i",
+            [$postId]
+        );
     }
 }

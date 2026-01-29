@@ -30,9 +30,9 @@ class Validator
         return true;
     }
 
-    public static function checkUserId(int $animationUserId): bool
+    public static function checkUserId(int $userId): bool
     {
-        if (Session::user()["id"] !== $animationUserId) {
+        if (Session::user()["id"] !== $userId) {
             return false;
         }
         return true;
