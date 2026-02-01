@@ -1,7 +1,6 @@
 <nav class="navbar" id="appNavbar">
   <div class="navbar-container">
 
-    <!-- Left Side - Brand (always visible) -->
     <div class="navbar-brand">
       <div class="brand-logo">
         <svg width="32" height="32" viewBox="0 0 56 56" fill="none">
@@ -25,22 +24,15 @@
       <span class="brand-name">SVG Animator</span>
     </div>
 
-    <!-- Center - Navigation Links (rendered by JS) -->
-    <div class="navbar-links" id="navbarLinks" aria-label="Основна навигация">
-      <!-- JS will render nav items here -->
-    </div>
+    <div class="navbar-links" id="navbarLinks" aria-label="Основна навигация"></div>
 
-    <!-- Right Side - User + Dropdown -->
     <div class="navbar-user">
       <div class="user-menu" id="userMenu">
-
-        <!-- ✅ User text LEFT of avatar (NOT in dropdown) -->
         <div class="user-info">
           <span class="user-name" id="userName">Потребител</span>
           <span class="user-role" id="userRole">Animator</span>
         </div>
 
-        <!-- Avatar button -->
         <button class="user-avatar user-avatar-btn" id="userMenuBtn" type="button"
           aria-label="Потребителско меню" aria-haspopup="menu" aria-expanded="false">
           <img src="" alt="User Avatar" id="userAvatar">
@@ -53,24 +45,19 @@
           <span class="avatar-status online"></span>
         </button>
 
-        <!-- Dropdown -->
         <div class="user-dropdown" id="userDropdown" role="menu" aria-label="Потребителско меню">
 
-          <!-- NAVIGATION (rendered by JS, above actions) -->
           <div class="dropdown-section dropdown-nav" id="dropdownNavSection">
             <div class="dropdown-section-title">Навигация</div>
-            <div id="dropdownNavList">
-              <!-- JS will render nav items here -->
-            </div>
+            <div id="dropdownNavList"></div>
           </div>
 
-          <!-- USER ACTIONS (no user header here) -->
           <div class="dropdown-section">
-            <a class="dropdown-item" href="/dashboard/profile.html" role="menuitem">
+            <a class="dropdown-item" href="/svganimator/frontend/dashboard/profile" role="menuitem">
               <span class="dropdown-item-label">Профил</span>
             </a>
 
-            <a class="dropdown-item" href="/dashboard/settings.html" role="menuitem">
+            <a class="dropdown-item" href="/svganimator/frontend/dashboard/settings" role="menuitem">
               <span class="dropdown-item-label">Настройки</span>
             </a>
 

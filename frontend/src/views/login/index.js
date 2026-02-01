@@ -184,7 +184,7 @@ loginForm.addEventListener('submit', async (e) => {
     submitBtn.innerHTML = '<span class="btn-text">Успешен вход!</span>';
 
     setTimeout(() => {
-      window.location.href = "platform/projects";
+      window.location.href = "/svganimator/frontend/platform/my-projects";
     }, 1000);
 
   } catch (error) {

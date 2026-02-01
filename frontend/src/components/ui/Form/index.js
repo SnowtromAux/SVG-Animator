@@ -1,20 +1,46 @@
 (() => {
+  const BASE = '/svganimator/frontend';
+  const SRC  = `${BASE}/src`;
+
   const mountId = 'dynamic-form-modal-mount';
 
   window.DynamicFormModalReady = (async () => {
     const mount = document.getElementById(mountId);
-    if (!mount) return;
+    if (!mount) {
+      console.warn(`[DynamicFormModal] Missing mount #${mountId}`);
+      return;
+    }
 
-    const res = await fetch('../../components/Form/Form.html');
-    const html = await res.text();
+    // ✅ Абсолютен път към HTML
+    const url = `${SRC}/components/ui/Form/index.html`;
+
+    let html = '';
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error(`[DynamicFormModal] Failed to fetch HTML (${res.status}) at: ${url}`);
+        return;
+      }
+      html = await res.text();
+    } catch (err) {
+      console.error('[DynamicFormModal] Fetch error:', err);
+      return;
+    }
+
     mount.innerHTML = html;
 
-    const overlay = document.getElementById('dfmOverlay');
-    const closeBtn = document.getElementById('dfmClose');
-    const titleEl = document.getElementById('dfmTitle');
-    const fieldsEl = document.getElementById('dfmFields');
-    const footerEl = document.getElementById('dfmFooter');
-    const formEl = document.getElementById('dfmForm');
+    // ✅ Всичко търсим вътре в mount (по-сигурно)
+    const overlay  = mount.querySelector('#dfmOverlay');
+    const closeBtn = mount.querySelector('#dfmClose');
+    const titleEl  = mount.querySelector('#dfmTitle');
+    const fieldsEl = mount.querySelector('#dfmFields');
+    const footerEl = mount.querySelector('#dfmFooter');
+    const formEl   = mount.querySelector('#dfmForm');
+
+    if (!overlay || !closeBtn || !titleEl || !fieldsEl || !footerEl || !formEl) {
+      console.error('[DynamicFormModal] Missing required DOM nodes in Form.html');
+      return;
+    }
 
     let currentConfig = null;
 
@@ -188,22 +214,13 @@
         const input = wrap.querySelector('[data-input="1"]');
         if (!input) return;
 
-        if (opt.type === 'string') {
-          values[key] = String(input.value || '');
-        }
-
+        if (opt.type === 'string') values[key] = String(input.value || '');
         if (opt.type === 'number') {
           const raw = String(input.value || '').trim();
           values[key] = raw === '' ? null : Number(raw);
         }
-
-        if (opt.type === 'options') {
-          values[key] = String(input.value || '');
-        }
-
-        if (opt.type === 'file') {
-          values[key] = input.files && input.files[0] ? input.files[0] : null;
-        }
+        if (opt.type === 'options') values[key] = String(input.value || '');
+        if (opt.type === 'file') values[key] = input.files && input.files[0] ? input.files[0] : null;
       });
 
       return values;
@@ -246,9 +263,7 @@
             value="${String(def).replace(/"/g, '&quot;')}"
           />
         `;
-        if (settings.hint) {
-          helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
-        }
+        if (settings.hint) helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
       }
 
       if (opt.type === 'number') {
@@ -266,9 +281,7 @@
             value="${String(def).replace(/"/g, '&quot;')}"
           />
         `;
-        if (settings.hint) {
-          helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
-        }
+        if (settings.hint) helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
       }
 
       if (opt.type === 'file') {
@@ -291,10 +304,7 @@
             <button class="dfm-file-clear" type="button" data-file-clear="1">Премахни</button>
           </div>
         `;
-        if (settings.hint) {
-          // hint-а, ако имаш, ще стои под chips-а (втори ред helper)
-          helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
-        }
+        if (settings.hint) helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
       }
 
       if (opt.type === 'options') {
@@ -322,9 +332,7 @@
             ${optionsHtml}
           </select>
         `;
-        if (settings.hint) {
-          helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
-        }
+        if (settings.hint) helpBelowInputHTML = `<div class="dfm-help">${settings.hint}</div>`;
       }
 
       return `
@@ -361,6 +369,21 @@
           const values = collectValues(options || []);
           const api = { close, values };
           const fn = btn.onClick || btn.function || btn.fn;
+
+          // ✅ ако нямаш функция - пак може да правиш redirect по config
+          if (btn.action === 'close') {
+            close();
+            return;
+          }
+
+          if (btn.action === 'create') {
+            // примерна логика за storage + redirect (ако е описано)
+            if (btn.storageKey) {
+              try { localStorage.setItem(btn.storageKey, JSON.stringify(values)); } catch (_) {}
+            }
+            if (btn.redirect) window.location.href = btn.redirect;
+            return;
+          }
 
           if (typeof fn === 'function') {
             fn(values, api);
@@ -405,9 +428,8 @@
 
       input.addEventListener('change', () => {
         updateSelected();
-
-        // “меко” валидиране при избор (за по-добър UX)
         clearFieldError(wrap);
+
         const settings = opt.options_settings || {};
         const file = input.files && input.files[0] ? input.files[0] : null;
         if (!file) return;
@@ -444,7 +466,6 @@
       titleEl.textContent = title;
       fieldsEl.innerHTML = options.map(renderField).join('');
 
-      // live clear errors on input change
       options.forEach((opt) => {
         const key = opt.option_name;
         const wrap = fieldsEl.querySelector(`[data-field="${CSS.escape(key)}"]`);
@@ -456,9 +477,7 @@
         input.addEventListener('input', () => clearFieldError(wrap));
         input.addEventListener('change', () => clearFieldError(wrap));
 
-        if (opt.type === 'file') {
-          wireFileUi(opt);
-        }
+        if (opt.type === 'file') wireFileUi(opt);
       });
 
       renderButtons(buttons, options);
@@ -476,7 +495,6 @@
       if (e.key === 'Escape' && overlay.classList.contains('active')) close();
     });
 
-    // prevent default submit on Enter
     formEl.addEventListener('submit', (e) => e.preventDefault());
 
     window.DynamicFormModal = { open, close };
