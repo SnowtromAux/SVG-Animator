@@ -4,6 +4,8 @@
 
 class Navbar {
   constructor() {
+    this.BASE = '/svganimator/frontend';
+
     this.navbarContainer = null;
 
     this.currentUser = {
@@ -11,12 +13,20 @@ class Navbar {
       avatar: '',
       role: 'Animator'
     };
+
+    // ✅ IMPORTANT:
+    // These routes must exist as:
+    // /svganimator/frontend/src/views/<route>/index.html
+    // Example: /dashboard/create -> src/views/dashboard/create/index.html
     this.navItems = [
       {
         id: "my-projects",
         label: "Моите проекти",
-        href: "/dashboard/projects.html",
-        keys: ["views/dashboard/projects.html", "/dashboard/projects"],
+        href: `${this.BASE}/platform/my-projects`,
+        keys: [
+          "platform/my-projects",
+          `${this.BASE}/platform/my-projects`
+        ],
         active: true,
         svg: `
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -29,9 +39,12 @@ class Navbar {
       },
       {
         id: "menu-2",
-        label: "Меню 2",
-        href: "/dashboard/create.html",
-        keys: ["views/dashboard/create.html", "/dashboard/create", "/dashboard/create.html"],
+        label: "Създай",
+        href: `${this.BASE}/dashboard/create`,
+        keys: [
+          "dashboard/create",
+          `${this.BASE}/dashboard/create`
+        ],
         active: false,
         svg: `
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -43,9 +56,12 @@ class Navbar {
       },
       {
         id: "menu-3",
-        label: "Меню 3",
-        href: "/dashboard/templates.html",
-        keys: ["views/dashboard/templates.html", "/dashboard/templates", "/dashboard/templates.html"],
+        label: "Шаблони",
+        href: `${this.BASE}/dashboard/templates`,
+        keys: [
+          "dashboard/templates",
+          `${this.BASE}/dashboard/templates`
+        ],
         active: false,
         svg: `
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -66,7 +82,6 @@ class Navbar {
     this.userDropdown = null;
     this.userMenuWrap = null;
 
-    // user text refs
     this.userNameEl = null;
     this.userRoleEl = null;
 
@@ -91,7 +106,7 @@ class Navbar {
 
   async loadNavbar() {
     try {
-      const response = await fetch('../../components/navbar/navbar.html');
+      const response = await fetch(`${this.BASE}/src/components/Layout/Navbar/index.html`);
       const html = await response.text();
 
       this.navbarContainer = document.createElement('div');
@@ -120,10 +135,6 @@ class Navbar {
     this.userNameEl = document.getElementById('userName');
     this.userRoleEl = document.getElementById('userRole');
   }
-
-  /* -----------------------------
-     NAV RENDER (config-driven)
-     ----------------------------- */
 
   createNavLink(item, variant) {
     const a = document.createElement('a');
@@ -172,10 +183,6 @@ class Navbar {
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;');
   }
-
-  /* -----------------------------
-     ACTIVE BY KEYS
-     ----------------------------- */
 
   normalizePath(p) {
     if (!p) return '';
@@ -245,19 +252,11 @@ class Navbar {
     this.setActiveById(match.id);
   }
 
-  /* -----------------------------
-     NAV COLLAPSE
-     NEW LOGIC: collapse when we don't have >= desiredGap
-     on BOTH sides of the nav links (logo <-> links and links <-> user)
-     ----------------------------- */
-
   updateNavCollapse() {
     if (!this.navbarEl || !this.navbarLinksEl) return;
 
-    // ✅ Desired minimum gap (px) from links to brand and from links to user
-    const desiredGap = 40; // <-- change this to whatever you like
+    const desiredGap = 40;
 
-    // temporarily uncollapse to measure links width
     const wasCollapsed = this.navbarEl.classList.contains('nav-collapsed');
     if (wasCollapsed) this.navbarEl.classList.remove('nav-collapsed');
 
@@ -271,14 +270,9 @@ class Navbar {
     const containerWidth = container.clientWidth;
     const brandWidth = brand.getBoundingClientRect().width;
     const userWidth = user.getBoundingClientRect().width;
-
-    // how much nav links want
     const linksWidth = links.scrollWidth;
 
-    // free space remaining after placing brand + links + user
     const freeSpace = containerWidth - brandWidth - linksWidth - userWidth;
-
-    // We want at least desiredGap on BOTH sides => freeSpace must be >= 2*desiredGap
     const minFreeSpace = desiredGap * 2;
 
     const shouldCollapse = freeSpace < minFreeSpace;
@@ -286,10 +280,6 @@ class Navbar {
     if (shouldCollapse) this.navbarEl.classList.add('nav-collapsed');
     else this.navbarEl.classList.remove('nav-collapsed');
   }
-
-  /* -----------------------------
-     DROPDOWN
-     ----------------------------- */
 
   openDropdown() {
     if (!this.userDropdown || !this.userMenuBtn) return;
@@ -309,10 +299,6 @@ class Navbar {
     if (isOpen) this.closeDropdown();
     else this.openDropdown();
   }
-
-  /* -----------------------------
-     EVENTS / USER
-     ----------------------------- */
 
   bindEvents() {
     if (this.userMenuBtn) {
@@ -334,7 +320,6 @@ class Navbar {
     };
     document.addEventListener('keydown', this.onDocKeydown);
 
-    // guard disabled
     document.addEventListener('click', (e) => {
       const target = e.target.closest('.disabled,[aria-disabled="true"]');
       if (!target) return;
@@ -348,7 +333,7 @@ class Navbar {
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
         localStorage.removeItem('svg_animator_user');
-        window.location.href = '/';
+        window.location.href = `${this.BASE}/login`;
       });
     }
 
