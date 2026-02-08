@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Моите постове - SVG Animator</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/svganimator/frontend/globals.css">
+  <link rel="stylesheet" href="/svganimator/frontend/src/views/platform/my-posts/styles.css">
+
+  <!-- Navbar styles -->
+  <link rel="stylesheet" href="/svganimator/frontend/src/components/layout/Navbar/styles.css">
+</head>
+
+<body>
+  <!-- Animated Background -->
+  <div class="background">
+    <canvas id="particleCanvas"></canvas>
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="dashboard-container">
+    <div class="page-header">
+      <div class="header-content">
+        <h1 class="page-title">Моите постове</h1>
+        <p class="page-subtitle">Управлявайте публикациите си</p>
+      </div>
+
+      <!-- НЯМА search bar (по изискване) -->
+      <div class="header-actions">
+        <!-- може да добавиш бутон "Нов пост" по-късно -->
+      </div>
+    </div>
+
+    <div class="feed-container" id="feedContainer"></div>
+  </main>
+
+  <!-- Post Modal -->
+  <div class="post-modal" id="postModal" aria-hidden="true">
+    <div class="post-modal__backdrop" data-action="close-modal"></div>
+    <div class="post-modal__panel" role="dialog" aria-modal="true" aria-label="Преглед на публикация">
+      <div class="post-modal__content" id="postModalContent"></div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/svganimator/frontend/src/components/layout/Navbar/index.js"></script>
+  <script src="/svganimator/frontend/src/views/platform/my-posts/index.js"></script>
+</body>
+</html>
