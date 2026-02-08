@@ -4,31 +4,70 @@
 
 class Validator
 {
-    public static function email(string $email): bool
+    public static function email(string $email): array
     {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return false;
+            return [
+                "valid" => false,
+                "message" => "Невалиден имейл адрес."
+            ];
         }
-        return true;
+
+        return [
+            "valid" => true,
+            "message" => ""
+        ];
     }
 
-    public static function username(string $username): bool
+
+    public static function username(string $username): array
     {
-        if (!filter_var($username, FILTER_VALIDATE_REGEXP, [
-            "options" => ["regexp" => "/^[A-Za-z0-9._-]{3,50}$/"]
-        ])) {
-            return false;
+        $length = mb_strlen($username);
+
+        if ($length < 3) {
+            return [
+                "valid" => false,
+                "message" => "Потребителското име е твърде късо (минимум 3 символа)."
+            ];
         }
-        return true;
+
+        if ($length > 50) {
+            return [
+                "valid" => false,
+                "message" => "Потребителското име е твърде дълго (максимум 50 символа)."
+            ];
+        }
+
+        if (!preg_match('/^[A-Za-z0-9._-]+$/', $username)) {
+            return [
+                "valid" => false,
+                "message" => "Забранени са интервали, кирилица и специални символи като: ! @ # $ % ^ & * ( ) + = { } [ ] | \\ : ; \" ' < > , ? /"
+            ];
+        }
+
+
+        return [
+            "valid" => true,
+            "message" => ""
+        ];
     }
 
-    public static function password(string $password): bool
+
+    public static function password(string $password): array
     {
         if (strlen($password) < 6) {
-            return false;
+            return [
+                "valid" => false,
+                "message" => "Паролата трябва да бъде поне 6 символа."
+            ];
         }
-        return true;
+
+        return [
+            "valid" => true,
+            "message" => ""
+        ];
     }
+
 
     public static function checkUserId(int $userId): bool
     {

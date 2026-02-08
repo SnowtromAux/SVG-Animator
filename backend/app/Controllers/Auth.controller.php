@@ -21,26 +21,46 @@ class AuthController extends Controller
                 $username = trim($data["username"] ?? "");
                 $password = $data["password"] ?? "";
 
-                if (!Validator::email($email)) {
-                    Response::error('INVALID_CREDENTIAL',"невалиден имейл", 401);
+                $valid = Validator::email($email);
+                if (!$valid["valid"]) {
+                    Response::error('INVALID_CREDENTIAL',$valid["message"], 401);
                     return;
                 }
-                if (!Validator::username($username)) {
-                    Response::error('INVALID_CREDENTIAL',"невалидено потребителско име", 401);
+                $valid = Validator::username($username);
+                if (!$valid["valid"]) {
+                    Response::error('INVALID_CREDENTIAL',$valid["message"], 401);
                     return;
                 }
-                if (!Validator::password($password)) {
-                    Response::error('INVALID_CREDENTIAL',"невалидна парола", 401);
+                $valid = Validator::password($password);
+                if (!$valid["valid"]) {
+                    Response::error('INVALID_CREDENTIAL',$valid["message"], 401);
                     return;
                 }
 
                 $existing = UserRepository::findByEmailOrUsername($conn, $email, $username);
-                if ($existing) {
+                if ($existing["email"] === $email && $existing["username"] === $username) {
                     Response::error(
                         "USER_EXISTS",
-                        "Email и/или username вече съществуват.",
+                        "Email и username вече съществуват.",
                         409
                     );
+                    return;
+                }
+                if ($existing["email"] === $email) {
+                    Response::error(
+                        "USER_EXISTS",
+                        "Email вече e използван",
+                        409
+                    );
+                    return;
+                }
+                if ($existing["username"] === $username) {
+                    Response::error(
+                        "USER_EXISTS",
+                        "този username вече e използван",
+                        409
+                    );
+                    return;
                 }
 
                 $userId = UserRepository::create(
@@ -70,8 +90,14 @@ class AuthController extends Controller
                 
                 $user = UserRepository::findByEmailOrUsername($conn, $login, $login);
 
-                if (!$user || ! PasswordHasher::verify($password, $user["password"])) {
-                    Response::error("INVALID_CREDENTIALS", "Грешен login или парола.", 401);
+                if(!$user){
+                    Response::error("INVALID_CREDENTIALS", "не съществува user с това потребителско име или имейл", 401);
+                    return;
+                } 
+
+                if (! PasswordHasher::verify($password, $user["password"])) {
+                    Response::error("INVALID_CREDENTIALS", "Грешна парола", 401);
+                    return;
                 }
 
                 Session::login((int)$user["id"], (string)$user["username"], (string)$user["email"]);
