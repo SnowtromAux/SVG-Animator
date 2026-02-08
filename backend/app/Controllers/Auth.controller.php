@@ -25,11 +25,11 @@ class AuthController extends Controller
                     Response::error('INVALID_CREDENTIAL',"невалиден имейл", 401);
                     return;
                 }
-                if (Validator::username($username)) {
+                if (!Validator::username($username)) {
                     Response::error('INVALID_CREDENTIAL',"невалидено потребителско име", 401);
                     return;
                 }
-                if (Validator::password($password)) {
+                if (!Validator::password($password)) {
                     Response::error('INVALID_CREDENTIAL',"невалидна парола", 401);
                     return;
                 }
