@@ -1,3 +1,5 @@
+import { loginRequest } from "../../services/auth.js";
+
 // ===== Particle Animation =====
 const canvas = document.getElementById('particleCanvas');
 const ctx = canvas.getContext('2d');
@@ -109,61 +111,103 @@ togglePasswordBtn.addEventListener('click', () => {
   );
 });
 
-function validateField(input, minLength = 1) {
-  const wrapper = input.closest('.input-wrapper');
-  const formGroup = wrapper.parentElement;
-  const existingError = formGroup.querySelector('.error-message');
+// Helpers
+function getWrapper(input) {
+  return input.closest('.input-wrapper');
+}
+function getFormGroup(input) {
+  return input.closest('.form-group');
+}
 
-  if (existingError) {
-    existingError.remove();
-  }
+function removeErrorMessage(input) {
+  const group = getFormGroup(input);
+  const existingError = group.querySelector('.error-message');
+  if (existingError) existingError.remove();
+}
 
+function clearState(input) {
+  const wrapper = getWrapper(input);
+  removeErrorMessage(input);
   wrapper.classList.remove('error', 'success');
+}
 
-  if (input.value.trim().length < minLength) {
-    wrapper.classList.add('error');
+// Set ONLY visual error state (no message)
+function setErrorStateOnly(input) {
+  const wrapper = getWrapper(input);
+  wrapper.classList.remove('success');
+  wrapper.classList.add('error');
+}
 
-    const errorMsg = document.createElement('span');
-    errorMsg.className = 'error-message';
-    errorMsg.textContent = minLength > 1
-      ? `Минимум ${minLength} символа`
-      : 'Това поле е задължително';
+// Set error + message (use for password only)
+function setErrorWithMessage(input, message) {
+  const wrapper = getWrapper(input);
+  removeErrorMessage(input);
 
-    formGroup.appendChild(errorMsg);
+  wrapper.classList.remove('success');
+  wrapper.classList.add('error');
+
+  const errorMsg = document.createElement('span');
+  errorMsg.className = 'error-message';
+  errorMsg.textContent = message;
+
+  getFormGroup(input).appendChild(errorMsg);
+}
+
+function setSuccess(input) {
+  const wrapper = getWrapper(input);
+  removeErrorMessage(input);
+  wrapper.classList.remove('error');
+  wrapper.classList.add('success');
+}
+
+// Client validation: ONLY sets error (never success)
+function validateRequiredMin(input, minLength, emptyMsg, minMsg) {
+  const value = input.value.trim();
+
+  clearState(input);
+
+  if (value.length === 0) {
+    setErrorWithMessage(input, emptyMsg);
     return false;
   }
-
-  wrapper.classList.add('success');
+  if (value.length < minLength) {
+    setErrorWithMessage(input, minMsg);
+    return false;
+  }
   return true;
 }
 
-function clearError(input) {
-  const wrapper = input.closest('.input-wrapper');
-  const formGroup = wrapper.parentElement;
-  const existingError = formGroup.querySelector('.error-message');
-
-  if (existingError) {
-    existingError.remove();
-    wrapper.classList.remove('error');
-  }
-}
-
-usernameInput.addEventListener('input', () => clearError(usernameInput));
-passwordInput.addEventListener('input', () => clearError(passwordInput));
+// Clear states while typing
+usernameInput.addEventListener('input', () => clearState(usernameInput));
+passwordInput.addEventListener('input', () => clearState(passwordInput));
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const submitBtn = loginForm.querySelector('.submit-btn');
+  const btnTextEl = submitBtn.querySelector('.btn-text');
 
-  const isUsernameValid = validateField(usernameInput, 3);
-  const isPasswordValid = validateField(passwordInput, 6);
+  // Clear old states before validating
+  clearState(usernameInput);
+  clearState(passwordInput);
 
-  if (!isUsernameValid || !isPasswordValid) {
+  const okUser = validateRequiredMin(
+    usernameInput,
+    3,
+    'Това поле е задължително',
+    'Минимум 3 символа'
+  );
+
+  const okPass = validateRequiredMin(
+    passwordInput,
+    6,
+    'Това поле е задължително',
+    'Минимум 6 символа'
+  );
+
+  if (!okUser || !okPass) {
     submitBtn.style.animation = 'shake 0.5s ease';
-    setTimeout(() => {
-      submitBtn.style.animation = '';
-    }, 500);
+    setTimeout(() => { submitBtn.style.animation = ''; }, 500);
     return;
   }
 
@@ -171,25 +215,49 @@ loginForm.addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
 
   try {
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const login = usernameInput.value.trim();
+    const password = passwordInput.value;
 
-    const formData = {
-      username: usernameInput.value.trim(),
-      password: passwordInput.value
-    };
+    const result = await loginRequest({ login, password });
 
-    console.log('Login attempt:', formData.username);
+    if (result?.success) {
+      setSuccess(usernameInput);
+      setSuccess(passwordInput);
 
-    submitBtn.style.background = 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)';
-    submitBtn.innerHTML = '<span class="btn-text">Успешен вход!</span>';
+      submitBtn.style.background = 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)';
+      btnTextEl.textContent = 'Успешен вход!';
 
-    setTimeout(() => {
-      window.location.href = "/svganimator/frontend/platform/my-projects";
-    }, 1000);
+      setTimeout(() => {
+        window.location.href = "/svganimator/frontend/platform/my-projects";
+      }, 700);
+
+      return;
+    }
+
+    const message =
+      result?.error?.message ||
+      'Възникна грешка. Моля, опитайте отново.';
+
+    removeErrorMessage(usernameInput);
+    removeErrorMessage(passwordInput);
+
+    setErrorStateOnly(usernameInput);
+    setErrorWithMessage(passwordInput, message);
+
+    submitBtn.style.animation = 'shake 0.5s ease';
+    setTimeout(() => { submitBtn.style.animation = ''; }, 500);
 
   } catch (error) {
     console.error('Login error:', error);
-    alert('Възникна грешка. Моля, опитайте отново.');
+
+    const message = 'Възникна грешка. Моля, опитайте отново.';
+
+    removeErrorMessage(usernameInput);
+    removeErrorMessage(passwordInput);
+
+    setErrorStateOnly(usernameInput);
+    setErrorWithMessage(passwordInput, message);
+
   } finally {
     submitBtn.classList.remove('loading');
     submitBtn.disabled = false;
