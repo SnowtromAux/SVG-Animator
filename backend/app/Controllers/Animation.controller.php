@@ -62,7 +62,7 @@ class AnimationController extends Controller
                 $name = $data["name"];
 
                 $newID = AnimationRepositories::createAnimation($conn, $userId, $settings, $svgText, $name);
-                
+
                 if (!$newID) {
                     Response::error("CREATION_FAILED", "failed to create animation");
                 } else {
@@ -167,9 +167,9 @@ class AnimationController extends Controller
             }
 
             Response::success([
-                    "animation_ids" => $data["items"],
-                    "numOfPages" => $data["numOfPages"]
-                ],200);
+                "animations" => $data["items"],
+                "numOfPages" => $data["numOfPages"]
+            ], 200);
         });
     }
 }

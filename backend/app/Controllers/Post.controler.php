@@ -35,7 +35,7 @@ class PostController extends Controller
                 $result = PostRepositories::createPost($conn, $userId, $animationId, $description);
 
                 if (!$result) {
-                    Response::error("DATABASE_FAIL", "не успяхте да създаде нов пост");
+                    Response::error("DATABASE_FAIL", "неуспяхте да създаде нов пост");
                 } else {
                     Response::success([
                         "post_id" => $result

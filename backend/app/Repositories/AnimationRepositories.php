@@ -165,9 +165,9 @@ class AnimationRepositories
             ];
         }
 
-        $countSql = "SELECT COUNT(*) AS total 
-                     FROM animation 
-                     WHERE user_id = ?";
+        $countSql = "SELECT COUNT(*) AS total
+                 FROM animation
+                 WHERE user_id = ?";
 
         $countRow = DataBase::fetchRow($db, $countSql, "i", [$userId]);
         $totalItems = (int)($countRow["total"] ?? 0);
@@ -184,23 +184,60 @@ class AnimationRepositories
 
         $offset = ($page - 1) * $perPage;
 
-        $sql = "SELECT id
-                FROM animation
-                WHERE user_id = ?
-                ORDER BY id ASC
-                LIMIT ? OFFSET ?
+        // 1) Взимаме пълната информация за анимациите (без user_id) за текущата страница
+        $sqlAnimations = "
+        SELECT id, created_at, name, starting_svg, animation_settings, duration
+        FROM animation
+        WHERE user_id = ?
+        ORDER BY id ASC
+        LIMIT ? OFFSET ?;
+    ";
+
+        $animations = DataBase::fetchAll($db, $sqlAnimations, "iii", [$userId, $perPage, $offset]);
+
+        if (count($animations) === 0) {
+            return [
+                "ok" => true,
+                "items" => [],
+                "numOfPages" => $totalPages
+            ];
+        }
+
+        $items = [];
+
+        foreach ($animations as $a) {
+            $animationId = (int)$a["id"];
+
+            $sqlSegments = "
+                SELECT id, animation_id, step, animation_data, easing, duration
+                FROM animation_segment
+                WHERE animation_id = ?
+                ORDER BY step ASC;
                 ";
 
-        $rows = DataBase::fetchAll($db, $sql, "iii", [$userId, $perPage, $offset]);
+            $segments = DataBase::fetchAll($db, $sqlSegments, "i", [$animationId]);
 
-        $ids = array_map(fn($r) => (int)$r["id"], $rows);
+            foreach ($segments as &$seg) {
+                $seg["id"] = (int)$seg["id"];
+                $seg["animation_id"] = (int)$seg["animation_id"];
+                $seg["step"] = (int)$seg["step"];
+                $seg["duration"] = (int)$seg["duration"];
+            }
+            unset($seg);
+
+            $items[] = [
+                "animation" => $a,
+                "animation_segments" => $segments
+            ];
+        }
 
         return [
             "ok" => true,
-            "items" => $ids,
+            "items" => $items,
             "numOfPages" => $totalPages
         ];
     }
+
 
     public static function getAnimationPreviewById(mysqli $db, int $animationId): ?array
     {
