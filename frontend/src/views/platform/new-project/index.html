@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Създай анимация - SVG Animator</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/svganimator/frontend/globals.css">
+  <link rel="stylesheet" href="/svganimator/frontend/src/views/platform/new-project/styles.css">
+</head>
+<body>
+  <!-- Animated Background (Subtle) -->
+  <div class="background editor-bg">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+  </div>
+
+  <!-- Main Editor Layout -->
+  <main class="editor-container">
+    <!-- Top Bar -->
+    <header class="editor-topbar">
+      <div class="topbar-left">
+        <a href="/dashboard/my-projects.html" class="back-btn" title="Назад към проекти">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <div class="project-name-wrapper">
+          <input type="text" class="project-name-input" id="projectName" value="Нова анимация" placeholder="Име на проекта">
+          <svg class="edit-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M10.5 1.5L12.5 3.5L4 12H2V10L10.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <div class="topbar-center">
+        <div class="brand-mini">
+          <svg width="24" height="24" viewBox="0 0 56 56" fill="none">
+            <rect width="56" height="56" rx="12" fill="url(#miniLogoGrad)"/>
+            <path d="M16 28L24 20L32 28L40 20" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 36L24 28L32 36L40 28" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+            <defs>
+              <linearGradient id="miniLogoGrad" x1="0" y1="0" x2="56" y2="56">
+                <stop stop-color="#6366F1"/>
+                <stop offset="1" stop-color="#8B5CF6"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span>SVG Animator</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <button class="topbar-btn" id="settingsBtn" title="Настройки">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="topbar-btn" id="exportBtn" title="Изтегли анимация">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="topbar-btn" id="closeBtn" title="Затвори">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="topbar-btn save-btn" id="saveBtn" title="Запази">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15.8333 17.5H4.16667C3.72464 17.5 3.30072 17.3244 2.98816 17.0118C2.67559 16.6993 2.5 16.2754 2.5 15.8333V4.16667C2.5 3.72464 2.67559 3.30072 2.98816 2.98816C3.30072 2.67559 3.72464 2.5 4.16667 2.5H13.3333L17.5 6.66667V15.8333C17.5 16.2754 17.3244 16.6993 17.0118 17.0118C16.6993 17.3244 16.2754 17.5 15.8333 17.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14.1667 17.5V10.8333H5.83333V17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.83333 2.5V6.66667H12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Запази</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Editor Main Area -->
+    <div class="editor-main">
+      <!-- Left Panel - SVG Elements Tree -->
+      <aside class="panel panel-left" id="elementsPanel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M6 2.25H3.75C2.92157 2.25 2.25 2.92157 2.25 3.75V14.25C2.25 15.0784 2.92157 15.75 3.75 15.75H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M12 2.25H14.25C15.0784 2.25 15.75 2.92157 15.75 3.75V14.25C15.75 15.0784 15.0784 15.75 14.25 15.75H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M6 9H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Елементи
+          </h3>
+          <button class="panel-action" id="refreshTree" title="Обнови">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2C10.0503 2 11.8734 3.01231 13 4.55556" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M10 4.5H13.5V1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="panel-content">
+          <div class="elements-tree" id="elementsTree">
+            <!-- SVG elements tree will be populated by JS -->
+            <div class="tree-placeholder">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4"/>
+                <path d="M24 18V30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M18 24H30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <p>Заредете SVG или добавете елементи</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <div class="import-buttons">
+            <button class="import-circle-btn" id="uploadSvgBtn" title="Зареди от файл">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M15.75 11.25V14.25C15.75 14.6478 15.592 15.0294 15.3107 15.3107C15.0294 15.592 14.6478 15.75 14.25 15.75H3.75C3.35218 15.75 2.97064 15.592 2.68934 15.3107C2.40804 15.0294 2.25 14.6478 2.25 14.25V11.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M12.75 6L9 2.25L5.25 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M9 2.25V11.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="import-circle-btn" id="importUrlBtn" title="Зареди от URL">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M7.5 9.75C7.82209 10.1806 8.23303 10.537 8.70493 10.7948C9.17682 11.0525 9.69865 11.2059 10.235 11.2442C10.7714 11.2826 11.3098 11.2053 11.8135 11.0173C12.3173 10.8294 12.7748 10.5353 13.155 10.155L15.405 7.905C16.0881 7.19774 16.4661 6.24798 16.4575 5.26224C16.449 4.2765 16.0546 3.33345 15.3593 2.63819C14.6641 1.94292 13.721 1.54852 12.7353 1.53997C11.7495 1.53143 10.7998 1.90941 10.0925 2.5925L8.8125 3.865" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10.5 8.25C10.1779 7.8194 9.76697 7.46304 9.29507 7.20528C8.82318 6.94751 8.30135 6.79409 7.765 6.75575C7.22865 6.71741 6.69024 6.79472 6.18651 6.98267C5.68278 7.17061 5.22518 7.46467 4.845 7.845L2.595 10.095C1.91191 10.8023 1.53393 11.752 1.54248 12.7378C1.55103 13.7235 1.94542 14.6666 2.64069 15.3618C3.33596 16.0571 4.279 16.4515 5.26474 16.46C6.25048 16.4686 7.20024 16.0906 7.9075 15.4075L9.18 14.135" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="import-circle-btn" id="importCodeBtn" title="Зареди от код">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M12 13.5L15.75 9L12 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6 4.5L2.25 9L6 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <input type="file" id="svgFileInput" accept=".svg" hidden>
+        </div>
+      </aside>
+
+      <!-- Center - Canvas Area -->
+      <section class="canvas-section">
+        <div class="canvas-wrapper">
+          <div class="canvas-container" id="canvasContainer">
+            <div class="canvas-placeholder" id="canvasPlaceholder">
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                <rect x="10" y="10" width="60" height="60" rx="8" stroke="currentColor" stroke-width="2" stroke-dasharray="6 6"/>
+                <circle cx="30" cy="30" r="8" stroke="currentColor" stroke-width="2"/>
+                <rect x="42" y="22" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/>
+                <path d="M22 50L32 40L42 50L58 34" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <p>Заредете SVG файл или създайте нов</p>
+            </div>
+            <svg id="mainCanvas" class="main-canvas" viewBox="0 0 800 600" style="display: none;">
+              <!-- SVG content will be loaded here -->
+            </svg>
+          </div>
+          <div class="canvas-controls">
+            <button class="canvas-ctrl-btn" id="zoomOut" title="Намали">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="8.25" cy="8.25" r="5.25" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M15.75 15.75L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M6 8.25H10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <span class="zoom-level" id="zoomLevel">100%</span>
+            <button class="canvas-ctrl-btn" id="zoomIn" title="Увеличи">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="8.25" cy="8.25" r="5.25" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M15.75 15.75L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M8.25 6V10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M6 8.25H10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="ctrl-divider"></div>
+            <button class="canvas-ctrl-btn" id="resetView" title="Нулирай изглед">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <rect x="3" y="3" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M3 7.5H15" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M7.5 7.5V15" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Timeline Resize Handle -->
+        <div class="timeline-resize-handle" id="timelineResizeHandle">
+          <div class="resize-grip"></div>
+        </div>
+
+        <!-- Timeline / Frames -->
+        <div class="timeline-section" id="timelineSection">
+          <div class="timeline-header">
+            <div class="timeline-info">
+              <span class="timeline-label">Времева линия</span>
+              <span class="timeline-fps">30 FPS</span>
+            </div>
+            <div class="playback-controls">
+              <button class="playback-btn" id="skipStart" title="Към началото">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M13 4L7 8L13 12V4Z" fill="currentColor"/>
+                </svg>
+              </button>
+              <button class="playback-btn" id="prevFrame" title="Предишен кадър">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M11 4L5 8L11 12V4Z" fill="currentColor"/>
+                </svg>
+              </button>
+              <button class="playback-btn play-btn" id="playPause" title="Пусни/Пауза">
+                <svg class="play-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 3L13 8L4 13V3Z" fill="currentColor"/>
+                </svg>
+                <svg class="pause-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" style="display: none;">
+                  <rect x="3" y="3" width="3.5" height="10" rx="1" fill="currentColor"/>
+                  <rect x="9.5" y="3" width="3.5" height="10" rx="1" fill="currentColor"/>
+                </svg>
+              </button>
+              <button class="playback-btn" id="nextFrame" title="Следващ кадър">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M5 4L11 8L5 12V4Z" fill="currentColor"/>
+                </svg>
+              </button>
+              <button class="playback-btn" id="skipEnd" title="Към края">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M13 4V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M3 4L9 8L3 12V4Z" fill="currentColor"/>
+                </svg>
+              </button>
+            </div>
+            <div class="timeline-time">
+              <span id="currentTime">0:00</span>
+              <span class="time-separator">/</span>
+              <span id="totalTime">0:00</span>
+            </div>
+          </div>
+          <div class="timeline-track-wrapper" id="timelineWrapper">
+            <div class="timeline-ruler" id="timelineRuler">
+              <!-- Ruler marks generated by JS -->
+            </div>
+            <div class="timeline-tracks-container" id="timelineTracksContainer">
+              <div class="timeline-tracks-labels" id="timelineLabels">
+                <!-- Track labels generated by JS -->
+              </div>
+              <div class="timeline-tracks-area" id="timelineTracksArea">
+                <div class="timeline-tracks" id="timelineTracks">
+                  <!-- Frame indicators generated by JS -->
+                </div>
+                <div class="timeline-playhead" id="playhead">
+                  <div class="playhead-marker"></div>
+                  <div class="playhead-line"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Panels -->
+      <aside class="panel panel-right">
+        <!-- Steps Panel -->
+        <div class="panel-section" id="stepsPanel">
+          <div class="panel-header">
+            <h3 class="panel-title">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M6 3H4.5C3.67157 3 3 3.67157 3 4.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M12 3H13.5C14.3284 3 15 3.67157 15 4.5V6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M6 15H4.5C3.67157 15 3 14.3284 3 13.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M12 15H13.5C14.3284 15 15 14.3284 15 13.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <rect x="6" y="6" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+              Стъпки
+            </h3>
+            <div class="steps-nav">
+              <button class="step-nav-btn" id="prevStep" title="Предишна стъпка" disabled>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M9 11L5 7L9 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <span class="step-indicator" id="stepIndicator">0 / 0</span>
+              <button class="step-nav-btn" id="nextStep" title="Следваща стъпка" disabled>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 11L9 7L5 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="panel-content steps-content">
+            <div class="steps-list" id="stepsList">
+              <div class="steps-placeholder">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                  <circle cx="20" cy="12" r="4" stroke="currentColor" stroke-width="1.5"/>
+                  <circle cx="20" cy="28" r="4" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M20 16V24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/>
+                </svg>
+                <p>Няма добавени стъпки</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Animation Panel -->
+        <div class="panel-section" id="addPanel">
+          <div class="panel-header">
+            <h3 class="panel-title">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="9" r="6.75" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M9 6V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M6 9H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Добавяне
+            </h3>
+          </div>
+          <div class="panel-content add-content">
+            <!-- Element Selection -->
+            <div class="form-group">
+              <label for="targetElement">Елемент</label>
+              <select id="targetElement" class="form-select" disabled>
+                <option value="">Изберете елемент</option>
+              </select>
+            </div>
+
+            <!-- Animation Type -->
+            <div class="form-group">
+              <label for="animationType">Тип анимация</label>
+              <select id="animationType" class="form-select" disabled>
+                <option value="">Изберете анимация</option>
+              </select>
+            </div>
+
+            <!-- Animation Values -->
+            <div class="form-group animation-values" id="animationValues" style="display: none;">
+              <label>Стойности</label>
+              <div class="value-inputs" id="valueInputs">
+                <!-- Dynamic inputs based on animation type -->
+              </div>
+            </div>
+
+            <!-- Start Time -->
+            <div class="form-group">
+              <label for="animationStartTime">Начало (сек)</label>
+              <input type="number" id="animationStartTime" class="form-input" value="0" min="0" max="60" step="0.1" disabled>
+            </div>
+
+            <!-- Duration -->
+            <div class="form-group">
+              <label for="animationDuration">Продължителност (сек)</label>
+              <input type="number" id="animationDuration" class="form-input" value="1" min="0.1" max="60" step="0.1" disabled>
+            </div>
+
+            <!-- Easing -->
+            <div class="form-group">
+              <label for="animationEasing">Easing</label>
+              <select id="animationEasing" class="form-select" disabled>
+                <option value="linear">Linear</option>
+                <option value="ease">Ease</option>
+                <option value="ease-in">Ease In</option>
+                <option value="ease-out">Ease Out</option>
+                <option value="ease-in-out" selected>Ease In Out</option>
+                <option value="cubic-bezier(0.68, -0.55, 0.265, 1.55)">Elastic</option>
+                <option value="cubic-bezier(0.175, 0.885, 0.32, 1.275)">Back</option>
+                <option value="cubic-bezier(0.6, 0.04, 0.98, 0.335)">Expo</option>
+              </select>
+            </div>
+
+            <!-- Add Button -->
+            <button class="btn-add-animation" id="addAnimationBtn" disabled>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M9 3.75V14.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M3.75 9H14.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Добави стъпка
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Unsaved Changes Modal -->
+  <div class="modal-overlay" id="unsavedModal" style="display: none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">Незапазени промени</h2>
+      </div>
+      <div class="modal-body">
+        <p>Имате незапазени промени. Искате ли да ги запазите преди да излезете?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="discardBtn">Откажи промените</button>
+        <button class="btn-primary" id="saveAndCloseBtn">Запази и излез</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import URL Modal -->
+  <div class="modal-overlay" id="importUrlModal" style="display: none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">Импортиране от URL</h2>
+        <button class="modal-close" id="closeUrlModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="svgUrlInput">URL на SVG файла</label>
+          <input type="url" id="svgUrlInput" class="form-input" placeholder="https://example.com/image.svg">
+        </div>
+        <p class="modal-hint">Въведете директен линк към SVG файл</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelUrlImport">Отказ</button>
+        <button class="btn-primary" id="confirmUrlImport">Импортирай</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Code Modal -->
+  <div class="modal-overlay" id="importCodeModal" style="display: none;">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">Импортиране на SVG код</h2>
+        <button class="modal-close" id="closeCodeModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="svgCodeInput">SVG код</label>
+          <textarea id="svgCodeInput" class="form-textarea" rows="12" placeholder="<svg viewBox='0 0 100 100'>...</svg>"></textarea>
+        </div>
+        <p class="modal-hint">Поставете SVG кода директно в полето</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelCodeImport">Отказ</button>
+        <button class="btn-primary" id="confirmCodeImport">Импортирай</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal" style="display: none;">
+    <div class="modal modal-settings">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Настройки на анимацията
+        </h2>
+        <button class="modal-close" id="closeSettingsModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- FPS Setting -->
+        <div class="settings-section">
+          <h4 class="settings-section-title">Кадри в секунда (FPS)</h4>
+          <div class="form-group">
+            <div class="fps-selector">
+              <button class="fps-option" data-fps="24">24</button>
+              <button class="fps-option" data-fps="30">30</button>
+              <button class="fps-option active" data-fps="60">60</button>
+              <div class="fps-custom">
+                <input type="number" id="customFps" class="form-input" min="1" max="120" placeholder="Custom">
+              </div>
+            </div>
+            <p class="settings-hint">По-високо FPS = по-плавна анимация, но по-голям файл</p>
+          </div>
+        </div>
+
+        <!-- ViewBox Settings -->
+        <div class="settings-section">
+          <h4 class="settings-section-title">ViewBox настройки</h4>
+          <div class="form-group">
+            <label class="checkbox-label-inline">
+              <input type="checkbox" id="useOriginalViewBox" checked>
+              <span class="checkbox-custom-inline"></span>
+              Използвай оригиналния viewBox от SVG
+            </label>
+          </div>
+          <div class="viewbox-inputs" id="viewboxInputs">
+            <div class="viewbox-row">
+              <div class="form-group">
+                <label for="viewboxMinX">Min X</label>
+                <input type="number" id="viewboxMinX" class="form-input" value="0">
+              </div>
+              <div class="form-group">
+                <label for="viewboxMinY">Min Y</label>
+                <input type="number" id="viewboxMinY" class="form-input" value="0">
+              </div>
+            </div>
+            <div class="viewbox-row">
+              <div class="form-group">
+                <label for="viewboxWidth">Ширина</label>
+                <input type="number" id="viewboxWidth" class="form-input" value="800">
+              </div>
+              <div class="form-group">
+                <label for="viewboxHeight">Височина</label>
+                <input type="number" id="viewboxHeight" class="form-input" value="600">
+              </div>
+            </div>
+            <p class="settings-hint">ViewBox определя видимата област на SVG анимацията</p>
+          </div>
+        </div>
+
+        <!-- Centering Option -->
+        <div class="settings-section">
+          <h4 class="settings-section-title">Позициониране</h4>
+          <div class="form-group">
+            <label class="checkbox-label-inline">
+              <input type="checkbox" id="keepCentered" checked>
+              <span class="checkbox-custom-inline"></span>
+              Центрирай съдържанието при промяна на viewBox
+            </label>
+            <p class="settings-hint">Елементите ще останат центрирани когато промените размера на viewBox</p>
+          </div>
+        </div>
+
+        <!-- Background Color -->
+        <div class="settings-section">
+          <h4 class="settings-section-title">Фон на канваса</h4>
+          <div class="form-group">
+            <div class="color-picker-row">
+              <input type="color" id="canvasBgColor" class="color-input" value="#0a0a12">
+              <input type="text" id="canvasBgColorText" class="form-input color-text-input" value="#0a0a12">
+              <button class="btn-transparent-bg" id="transparentBgBtn" title="Прозрачен фон">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <rect x="2" y="2" width="6" height="6" fill="#ccc"/>
+                  <rect x="10" y="2" width="6" height="6" fill="#fff"/>
+                  <rect x="2" y="10" width="6" height="6" fill="#fff"/>
+                  <rect x="10" y="10" width="6" height="6" fill="#ccc"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="resetSettingsBtn">Върни по подразбиране</button>
+        <button class="btn-primary" id="applySettingsBtn">Приложи</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export Modal -->
+  <div class="modal-overlay" id="exportModal" style="display: none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Изтегляне на анимация
+        </h2>
+        <button class="modal-close" id="closeExportModal">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 5L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="export-description">Изберете формат за изтегляне на анимацията.</p>
+        <div class="export-options">
+          <button class="export-option-btn" id="exportVideoBtn">
+            <div class="export-option-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <polygon points="10,8.5 16,12 10,15.5" fill="currentColor"/>
+              </svg>
+            </div>
+            <div class="export-option-info">
+              <span class="export-option-title">Видео (MP4 / WebM)</span>
+              <span class="export-option-desc">Единичен видео файл с анимацията</span>
+            </div>
+          </button>
+          <button class="export-option-btn" id="exportFramesBtn">
+            <div class="export-option-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <rect x="2" y="6" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="6" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <rect x="10" y="0" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5" opacity="0.5"/>
+              </svg>
+            </div>
+            <div class="export-option-info">
+              <span class="export-option-title">Поредица от снимки (PNG)</span>
+              <span class="export-option-desc">Отделна снимка за всеки кадър в ZIP</span>
+            </div>
+          </button>
+        </div>
+        <div class="export-progress" id="exportProgress" style="display: none;">
+          <div class="export-progress-bar">
+            <div class="export-progress-fill" id="exportProgressFill"></div>
+          </div>
+          <span class="export-progress-text" id="exportProgressText">0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/svganimator/frontend/src/views/platform/new-project/index.js" type="module"></script>
+</body>
+</html>

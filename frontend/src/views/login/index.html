@@ -4,8 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SVG Animator - Вход</title>
-  <link rel="stylesheet" href="../css/styles.css">
-  <link rel="stylesheet" href="../css/views/login.css">
+
+  <link rel="stylesheet" href="/svganimator/frontend/globals.css">
+  <link rel="stylesheet" href="/svganimator/frontend/src/views/login/styles.css">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,18 +25,18 @@
     <!-- Login -->
     <div class="login-card">
       <div class="card-glow"></div>
-      
+
       <!-- Logo Section -->
       <div class="logo-section">
         <div class="logo">
           <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect width="56" height="56" rx="16" fill="url(#logoGradient)"/>
             <path d="M16 28L24 20L32 28L40 20" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <animate attributeName="d" dur="3s" repeatCount="indefinite" 
+              <animate attributeName="d" dur="3s" repeatCount="indefinite"
                 values="M16 28L24 20L32 28L40 20;M16 24L24 32L32 24L40 32;M16 28L24 20L32 28L40 20"/>
             </path>
             <path d="M16 36L24 28L32 36L40 28" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
-              <animate attributeName="d" dur="3s" repeatCount="indefinite" 
+              <animate attributeName="d" dur="3s" repeatCount="indefinite"
                 values="M16 36L24 28L32 36L40 28;M16 32L24 40L32 32L40 40;M16 36L24 28L32 36L40 28"/>
             </path>
             <defs>
@@ -50,7 +52,8 @@
       </div>
 
       <!-- Login Form -->
-      <form id="loginForm" class="login-form" method="post" action="#">
+      <!-- IMPORTANT: method="get" so the browser NEVER re-submits a POST on refresh if JS fails -->
+      <form id="loginForm" class="login-form" action="" method="get">
         <div class="form-group">
           <label for="username">Потребителско име</label>
           <div class="input-wrapper">
@@ -58,10 +61,10 @@
               <path d="M10 10C12.0711 10 13.75 8.32107 13.75 6.25C13.75 4.17893 12.0711 2.5 10 2.5C7.92893 2.5 6.25 4.17893 6.25 6.25C6.25 8.32107 7.92893 10 10 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M17.5 17.5C17.5 14.7386 14.1421 12.5 10 12.5C5.85786 12.5 2.5 14.7386 2.5 17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <input 
-              type="text" 
-              id="username" 
-              name="username" 
+            <input
+              type="text"
+              id="username"
+              name="username"
               placeholder="Въведете потребителско име"
               required
               autocomplete="username"
@@ -78,10 +81,10 @@
               <path d="M6.25 8.75V6.25C6.25 4.17893 7.92893 2.5 10 2.5C12.0711 2.5 13.75 4.17893 13.75 6.25V8.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <circle cx="10" cy="13.125" r="1.25" fill="currentColor"/>
             </svg>
-            <input 
-              type="password" 
-              id="password" 
-              name="password" 
+            <input
+              type="password"
+              id="password"
+              name="password"
               placeholder="Въведете парола"
               required
               autocomplete="current-password"
@@ -117,7 +120,7 @@
       <!-- Register Link -->
       <div class="register-link">
         <span>Нямате акаунт?</span>
-        <a href="register.html">Регистрирайте се</a>
+        <a href="/svganimator/frontend/register">Регистрирайте се</a>
       </div>
 
       <!-- Decorative Elements -->
@@ -128,6 +131,7 @@
     </div>
   </div>
 
-  <script src="../js/views/login.js"></script>
+  <!-- IMPORTANT: type="module" is required because index.js uses import -->
+  <script type="module" src="/svganimator/frontend/src/views/login/index.js"></script>
 </body>
 </html>

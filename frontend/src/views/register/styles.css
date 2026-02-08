@@ -1,127 +1,105 @@
-/* Reset & Base Styles */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Register Card */
+.register-card {
+  max-width: 480px;
 }
 
-:root {
-  /* Dark Theme Colors */
-  --bg-primary: #050510;
-  --bg-secondary: #0a0a1a;
-  --surface: rgba(255, 255, 255, 0.03);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
-  
-  /* Text Colors */
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-muted: rgba(255, 255, 255, 0.4);
-  
-  /* Accent Colors - Purple/Indigo */
-  --accent-primary: #6366F1;
-  --accent-secondary: #8B5CF6;
-  --accent-glow: rgba(99, 102, 241, 0.4);
-  
-  /* Status Colors */
-  --success: #22C55E;
-  --success-dark: #16A34A;
-  --error: #EF4444;
-  --warning: #F59E0B;
-  
-  /* Gradient */
-  --gradient-primary: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A855F7 100%);
-  --gradient-text: linear-gradient(135deg, #6366F1 0%, #A855F7 100%);
-  --gradient-success: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
-  
-  /* Misc */
-  --radius: 1rem;
-  --radius-lg: 1.5rem;
-  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.register-card .form {
+  gap: 1.25rem;
 }
 
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ===== Password Strength Indicator ===== */
+.password-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
 }
 
-body {
-  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  min-height: 100vh;
-  line-height: 1.6;
-  overflow-x: hidden;
-}
-
-/* ===== Animated Background ===== */
-.background {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
+.strength-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--surface);
+  border-radius: 2px;
   overflow: hidden;
 }
 
-#particleCanvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
+.strength-fill {
   height: 100%;
+  width: 0;
+  background: var(--text-muted);
+  border-radius: 2px;
+  transition: width 0.3s ease, background 0.3s ease;
 }
 
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
-  animation: orbFloat 20s ease-in-out infinite;
+.strength-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: color 0.3s ease;
 }
 
-.orb-1 {
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
-  top: -200px;
-  right: -200px;
-  animation-delay: 0s;
+/* ===== Checkbox Group ===== */
+.checkbox-group {
+  margin-top: 0.5rem;
 }
 
-.orb-2 {
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.3) 0%, transparent 70%);
-  bottom: -150px;
-  left: -150px;
-  animation-delay: -7s;
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
 }
 
-.orb-3 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  animation-delay: -14s;
+.checkbox-wrapper input[type="checkbox"] {
+  display: none;
 }
 
-@keyframes orbFloat {
-  0%, 100% {
-    transform: translate(0, 0) scale(1);
-  }
-  25% {
-    transform: translate(30px, -30px) scale(1.05);
-  }
-  50% {
-    transform: translate(-20px, 20px) scale(0.95);
-  }
-  75% {
-    transform: translate(-30px, -20px) scale(1.02);
-  }
+.checkbox-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: transparent;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.checkbox-wrapper:hover .checkbox-custom {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.checkbox-wrapper input:checked + .checkbox-custom {
+  background: var(--gradient-primary);
+  border-color: transparent;
+  color: white;
+}
+
+.checkbox-wrapper input:focus-visible + .checkbox-custom {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.checkbox-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.checkbox-label a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.checkbox-label a:hover {
+  color: var(--accent-secondary);
+  text-decoration: underline;
 }
 
 /* ===== Main Container ===== */
@@ -468,21 +446,6 @@ body {
   animation: spin 0.7s linear infinite;
 }
 
-.submit-btn.loading .btn-text,
-.submit-btn.loading .btn-icon {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.submit-btn.loading .btn-loader {
-  display: block;
-  position: absolute;
-}
-
-.submit-btn.loading {
-  pointer-events: none;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -524,66 +487,16 @@ body {
   border-radius: 2px;
 }
 
-/* ===== Error States ===== */
-.input-wrapper.error input {
-  border-color: var(--error);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
-}
-
-.input-wrapper.error .input-icon {
-  color: var(--error);
-}
-
-.error-message {
-  font-size: 0.8125rem;
-  color: var(--error);
-  margin-top: 0.375rem;
-  animation: errorAppear 0.3s ease;
-}
-
-@keyframes errorAppear {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* ===== Success Animation ===== */
-@keyframes successPulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
-  }
-}
-
-.input-wrapper.success input {
-  border-color: var(--success);
-  animation: successPulse 1s ease;
-}
-
-/* ===== Shake Animation ===== */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-  20%, 40%, 60%, 80% { transform: translateX(4px); }
-}
-
 /* ===== Responsive Adjustments ===== */
 @media (max-width: 480px) {
   .card {
     padding: 2rem 1.5rem;
   }
-  
+
   .app-name {
     font-size: 1.75rem;
   }
-  
+
   .logo svg {
     width: 48px;
     height: 48px;

@@ -1,0 +1,74 @@
+<nav class="navbar" id="appNavbar">
+  <div class="navbar-container">
+
+    <div class="navbar-brand">
+      <div class="brand-logo">
+        <svg width="32" height="32" viewBox="0 0 56 56" fill="none">
+          <rect width="56" height="56" rx="12" fill="url(#navLogoGradient)"/>
+          <path d="M16 28L24 20L32 28L40 20" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <animate attributeName="d" dur="3s" repeatCount="indefinite"
+              values="M16 28L24 20L32 28L40 20;M16 24L24 32L32 24L40 32;M16 28L24 20L32 28L40 20"/>
+          </path>
+          <path d="M16 36L24 28L32 36L40 28" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.4">
+            <animate attributeName="d" dur="3s" repeatCount="indefinite"
+              values="M16 36L24 28L32 36L40 28;M16 32L24 40L32 32L40 40;M16 36L24 28L32 36L40 28"/>
+          </path>
+          <defs>
+            <linearGradient id="navLogoGradient" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#6366F1"/>
+              <stop offset="1" stop-color="#8B5CF6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <span class="brand-name">SVG Animator</span>
+    </div>
+
+    <div class="navbar-links" id="navbarLinks" aria-label="Основна навигация"></div>
+
+    <div class="navbar-user">
+      <div class="user-menu" id="userMenu">
+        <div class="user-info">
+          <span class="user-name" id="userName">Потребител</span>
+          <span class="user-role" id="userRole">Animator</span>
+        </div>
+
+        <button class="user-avatar user-avatar-btn" id="userMenuBtn" type="button"
+          aria-label="Потребителско меню" aria-haspopup="menu" aria-expanded="false">
+          <img src="" alt="User Avatar" id="userAvatar">
+          <div class="avatar-placeholder">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 12C14.4853 12 16.5 9.98528 16.5 7.5C16.5 5.01472 14.4853 3 12 3C9.51472 3 7.5 5.01472 7.5 7.5C7.5 9.98528 9.51472 12 12 12Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M21 21C21 17.6863 16.9706 15 12 15C7.02944 15 3 17.6863 3 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <span class="avatar-status online"></span>
+        </button>
+
+        <div class="user-dropdown" id="userDropdown" role="menu" aria-label="Потребителско меню">
+
+          <div class="dropdown-section dropdown-nav" id="dropdownNavSection">
+            <div class="dropdown-section-title">Навигация</div>
+            <div id="dropdownNavList"></div>
+          </div>
+
+          <div class="dropdown-section">
+            <a class="dropdown-item" href="/svganimator/frontend/dashboard/profile" role="menuitem">
+              <span class="dropdown-item-label">Профил</span>
+            </a>
+
+            <a class="dropdown-item" href="/svganimator/frontend/dashboard/settings" role="menuitem">
+              <span class="dropdown-item-label">Настройки</span>
+            </a>
+
+            <button class="dropdown-item danger" id="logoutBtn" type="button" role="menuitem">
+              <span class="dropdown-item-label">Изход</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
