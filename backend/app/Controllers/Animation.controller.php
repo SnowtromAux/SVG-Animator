@@ -157,9 +157,10 @@ class AnimationController extends Controller
     {
         self::withDb(function ($conn) {
             $page = (int)Request::param("page", 1);
+            $searchText = (string)Request::param("search_text", "");
             $userId = Session::user()["id"];
 
-            $data = AnimationRepositories::getAnimationsByUser($conn, $userId, $page);
+            $data = AnimationRepositories::getAnimationsByUser($conn, $userId, $page, $searchText);
 
             if (!$data["ok"]) {
                 Response::error("PAGE_PROBLEM", $data['error'], 404);
