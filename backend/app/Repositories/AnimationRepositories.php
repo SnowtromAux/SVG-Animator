@@ -152,10 +152,10 @@ class AnimationRepositories
         return $animation;
     }
 
-    public static function getAnimationsByUser(mysqli $db, int $userId, int $page): ?array
+    public static function getAnimationsByUser(mysqli $db, int $userId, int $page, string $searchText): ?array
     {
-        $perPage = (int)($_ENV["NUM_OF_ANIMATIONS_PER_PAGE"] ?? 20);
-        if ($perPage <= 0) $perPage = 20;
+        $perPage = self::getPerPage();
+        [$searchText, $hasSearch] = self::normalizeSearchText($searchText);
 
         if ($page < 1) {
             return [
@@ -165,35 +165,19 @@ class AnimationRepositories
             ];
         }
 
-        $countSql = "SELECT COUNT(*) AS total
-                 FROM animation
-                 WHERE user_id = ?";
+        [$whereSql, $whereTypes, $whereParams] = self::buildAnimationWhere($userId, $hasSearch, $searchText);
 
-        $countRow = DataBase::fetchRow($db, $countSql, "i", [$userId]);
-        $totalItems = (int)($countRow["total"] ?? 0);
-
+        $totalItems = self::countAnimations($db, $whereSql, $whereTypes, $whereParams);
         $totalPages = $totalItems === 0 ? 0 : (int)ceil($totalItems / $perPage);
 
-        if (($totalPages === 0 && $page !== 1) || ($totalPages > 0 && $page > $totalPages)) {
-            return [
-                "ok" => false,
-                "error" => "Page out of range",
-                "items" => [],
-            ];
+        $pageValidation = self::validatePage($page, $totalPages);
+        if ($pageValidation !== null) {
+            return $pageValidation;
         }
 
         $offset = ($page - 1) * $perPage;
 
-        // 1) Взимаме пълната информация за анимациите (без user_id) за текущата страница
-        $sqlAnimations = "
-        SELECT id, created_at, name, starting_svg, animation_settings, duration
-        FROM animation
-        WHERE user_id = ?
-        ORDER BY id ASC
-        LIMIT ? OFFSET ?;
-    ";
-
-        $animations = DataBase::fetchAll($db, $sqlAnimations, "iii", [$userId, $perPage, $offset]);
+        $animations = self::fetchAnimationsPage($db, $whereSql, $whereTypes, $whereParams, $perPage, $offset);
 
         if (count($animations) === 0) {
             return [
@@ -203,33 +187,7 @@ class AnimationRepositories
             ];
         }
 
-        $items = [];
-
-        foreach ($animations as $a) {
-            $animationId = (int)$a["id"];
-
-            $sqlSegments = "
-                SELECT id, animation_id, step, animation_data, easing, duration
-                FROM animation_segment
-                WHERE animation_id = ?
-                ORDER BY step ASC;
-                ";
-
-            $segments = DataBase::fetchAll($db, $sqlSegments, "i", [$animationId]);
-
-            foreach ($segments as &$seg) {
-                $seg["id"] = (int)$seg["id"];
-                $seg["animation_id"] = (int)$seg["animation_id"];
-                $seg["step"] = (int)$seg["step"];
-                $seg["duration"] = (int)$seg["duration"];
-            }
-            unset($seg);
-
-            $items[] = [
-                "animation" => $a,
-                "animation_segments" => $segments
-            ];
-        }
+        $items = self::attachSegments($db, $animations);
 
         return [
             "ok" => true,
@@ -237,7 +195,113 @@ class AnimationRepositories
             "numOfPages" => $totalPages
         ];
     }
+    
+    private static function getPerPage(): int
+    {
+        $perPage = (int)($_ENV["NUM_OF_ANIMATIONS_PER_PAGE"] ?? 20);
+        return $perPage > 0 ? $perPage : 20;
+    }
 
+    private static function normalizeSearchText(string $searchText): array
+    {
+        $searchText = trim($searchText);
+        return [$searchText, $searchText !== ""];
+    }
+
+    private static function buildAnimationWhere(int $userId, bool $hasSearch, string $searchText): array
+    {
+        $whereSql = " WHERE user_id = ? ";
+        $types = "i";
+        $params = [$userId];
+
+        if ($hasSearch) {
+            $whereSql .= " AND name LIKE ? ";
+            $types .= "s";
+            $params[] = "%" . $searchText . "%";
+        }
+
+        return [$whereSql, $types, $params];
+    }
+
+    private static function countAnimations(mysqli $db, string $whereSql, string $types, array $params): int
+    {
+        $sql = "SELECT COUNT(*) AS total FROM animation" . $whereSql;
+        $row = DataBase::fetchRow($db, $sql, $types, $params);
+        return (int)($row["total"] ?? 0);
+    }
+
+    private static function validatePage(int $page, int $totalPages): ?array
+    {
+        if (($totalPages === 0 && $page !== 1) || ($totalPages > 0 && $page > $totalPages)) {
+            return [
+                "ok" => false,
+                "error" => "Page out of range",
+                "items" => []
+            ];
+        }
+        return null;
+    }
+
+    private static function fetchAnimationsPage(
+        mysqli $db,
+        string $whereSql,
+        string $whereTypes,
+        array $whereParams,
+        int $perPage,
+        int $offset
+    ): array {
+        $sql = "
+        SELECT id, created_at, name, starting_svg, animation_settings, duration
+        FROM animation
+        $whereSql
+        ORDER BY id ASC
+        LIMIT ? OFFSET ?;
+    ";
+
+        $types = $whereTypes . "ii";
+        $params = array_merge($whereParams, [$perPage, $offset]);
+
+        return DataBase::fetchAll($db, $sql, $types, $params);
+    }
+
+    private static function attachSegments(mysqli $db, array $animations): array
+    {
+        $items = [];
+
+        foreach ($animations as $a) {
+            $animationId = (int)($a["id"] ?? 0);
+
+            $segments = self::fetchSegmentsByAnimationId($db, $animationId);
+
+            $items[] = [
+                "animation" => $a,
+                "animation_segments" => $segments
+            ];
+        }
+        return $items;
+    }
+
+    private static function fetchSegmentsByAnimationId(mysqli $db, int $animationId): array
+    {
+        $sql = "
+        SELECT id, animation_id, step, animation_data, easing, duration
+        FROM animation_segment
+        WHERE animation_id = ?
+        ORDER BY step ASC;
+        ";
+
+        $segments = DataBase::fetchAll($db, $sql, "i", [$animationId]);
+
+        foreach ($segments as &$seg) {
+            $seg["id"] = (int)$seg["id"];
+            $seg["animation_id"] = (int)$seg["animation_id"];
+            $seg["step"] = (int)$seg["step"];
+            $seg["duration"] = (int)$seg["duration"];
+        }
+        unset($seg);
+
+        return $segments;
+    }
 
     public static function getAnimationPreviewById(mysqli $db, int $animationId): ?array
     {
