@@ -1,3 +1,5 @@
+import { logoutRequest } from "../../../services/auth.js";
+
 class Navbar {
   constructor() {
     this.BASE = '/svganimator/frontend';
@@ -333,7 +335,14 @@ class Navbar {
 
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
+      logoutBtn.addEventListener('click', async () => {
+        try {
+          await logoutRequest();
+        } catch (_) {
+          // silent
+        }
+
+        // clear both old and new keys
         localStorage.removeItem('svg_animator_user');
         localStorage.removeItem('user.username');
         localStorage.removeItem('user.email');
@@ -373,7 +382,6 @@ class Navbar {
     }
 
     this.currentUser.email = lsEmail || this.currentUser.email || '';
-
     this.updateUserUI();
   }
 

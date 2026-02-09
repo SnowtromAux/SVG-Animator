@@ -1,9 +1,6 @@
 import { API_BASE_URL } from "../constants/env.js";
 
-/**
- * POST /auth/login
- * Body: { login: string, password: string }
- */
+// POST /auth/login
 export async function loginRequest({ login, password }) {
   const url = `${API_BASE_URL}/auth/login`;
 
@@ -18,6 +15,7 @@ export async function loginRequest({ login, password }) {
         "Accept": "application/json",
       },
       body: JSON.stringify({ login, password }),
+      // credentials: "include",
     });
   } catch (err) {
     console.error("[auth] NETWORK ERROR", err);
@@ -59,10 +57,7 @@ export async function loginRequest({ login, password }) {
   return { success: true, data };
 }
 
-/**
- * POST /auth/register
- * Body: { email: string, username: string, password: string }
- */
+// POST /auth/register
 export async function registerRequest({ email, username, password }) {
   const url = `${API_BASE_URL}/auth/register`;
 
@@ -77,6 +72,7 @@ export async function registerRequest({ email, username, password }) {
         "Accept": "application/json",
       },
       body: JSON.stringify({ email, username, password }),
+      // credentials: "include",
     });
   } catch (err) {
     console.error("[auth] NETWORK ERROR", err);
@@ -122,11 +118,7 @@ export async function registerRequest({ email, username, password }) {
   };
 }
 
-/**
- * GET /auth/me
- * Expected response:
- * {"success":true,"user":{"id":17,"username":"axel123","email":"snowtromgs@gmail.com"}}
- */
+// GET /auth/me
 export async function meRequest() {
   const url = `${API_BASE_URL}/auth/me`;
 
@@ -139,8 +131,6 @@ export async function meRequest() {
       headers: {
         "Accept": "application/json",
       },
-      // IMPORTANT: if your backend uses cookies/sessions and frontend+backend are different origins,
-      // you might need: credentials: "include"
       // credentials: "include",
     });
   } catch (err) {
@@ -174,6 +164,55 @@ export async function meRequest() {
     };
   }
 
-  // If it returned something unexpected but 2xx:
   return { success: false, error: { code: "INVALID_RESPONSE", message: "Invalid /auth/me response" } };
+}
+
+
+// GET /auth/logout
+export async function logoutRequest() {
+  const url = `${API_BASE_URL}/auth/logout`;
+
+  console.log("[auth] GET", url);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+      // credentials: "include",
+    });
+  } catch (err) {
+    console.error("[auth] LOGOUT NETWORK ERROR", err);
+    return {
+      success: false,
+      error: { code: "NETWORK_ERROR", message: "Network error" },
+    };
+  }
+
+  const text = await response.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (e) {
+    console.error("[auth] LOGOUT Non-JSON response body:", text);
+    data = null;
+  }
+
+  console.log("[auth] LOGOUT status:", response.status, "data:", data);
+
+  if (data && typeof data === "object" && "success" in data) {
+    return data;
+  }
+
+  if (!response.ok) {
+    return {
+      success: false,
+      error: { code: "HTTP_ERROR", message: `Request failed with status ${response.status}` },
+    };
+  }
+
+  return { success: true, message: "Изходът е успешен." };
 }
