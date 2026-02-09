@@ -101,9 +101,16 @@ class AnimationController extends Controller
                     return;
                 }
 
-                $totalDuration = 0;
+                $end_ats = [];
                 foreach ($animationSegments as $segment) {
-                    $totalDuration += $segment["duration"];
+                    array_push($end_ats, (float)$segment["end_at"]);
+                }
+
+                $animationDuration = max($end_ats);
+
+                if(number_format($animationDuration,2) > 60){
+                    Response::error("INVALID_DURATION", "Анимацията не може да е по-дълга от 60 секунди",401);
+                    return;
                 }
 
                 $result = AnimationRepositories::updateAnimation(
@@ -111,7 +118,7 @@ class AnimationController extends Controller
                     $animationId,
                     $animationSettings,
                     $animationName,
-                    $totalDuration,
+                    $animationDuration,
                     $animationSegments
                 );
 
