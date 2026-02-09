@@ -17,82 +17,11 @@
   <!-- Navbar styles -->
   <link rel="stylesheet" href="/svganimator/frontend/src/components/layout/Navbar/styles.css">
 
-  <!-- Modals styles (components) -->
-  <link rel="stylesheet" href="/svganimator/frontend/src/components/modals/InfoModal/styles.css">
-  <link rel="stylesheet" href="/svganimator/frontend/src/components/modals/ConfirmationModal/styles.css">
-  <link rel="stylesheet" href="/svganimator/frontend/src/components/ui/Form/styles.css">
-
   <script src="/svganimator/frontend/src/utils/auth-guard.js" type="module"></script>
 </head>
 <body>
   <!-- Navbar mount point -->
   <div id="navbar-mount"></div>
-
-  <!-- Modals mount points -->
-  <div id="info-modal-mount"></div>
-  <div id="confirmation-modal-mount"></div>
-  <div id="dynamic-form-modal-mount"></div>
-
-  <!-- ✅ Конфигурация за "Нов проект" (редактираш тук опциите) -->
-  <script type="application/json" id="newProjectModalConfig">
-  {
-    "name": "Нов проект",
-    "options": [
-      {
-        "option_name": "Име на проект",
-        "type": "string",
-        "options_settings": {
-          "required": true,
-          "placeholder": "Напр. Анимирано лого",
-          "default": ""
-        }
-      },
-      {
-        "option_name": "FPS",
-        "type": "number",
-        "options_settings": {
-          "required": true,
-          "min": 1,
-          "max": 120,
-          "step": 1,
-          "default": 60
-        }
-      },
-      {
-        "option_name": "SVG файл",
-        "type": "file",
-        "options_settings": {
-          "required": false,
-          "allowed_extensions": ["svg"],
-          "max_size_mb": 5
-        }
-      },
-      {
-        "option_name": "Шаблон",
-        "type": "options",
-        "options_settings": {
-          "required": true,
-          "choices": [
-            { "label": "Празен", "value": "blank" },
-            { "label": "Лого", "value": "logo" },
-            { "label": "Спинер", "value": "spinner" }
-          ],
-          "default": "blank"
-        }
-      }
-    ],
-    "buttons": [
-      { "name": "Откажи", "variant": "secondary", "action": "close" },
-      {
-        "name": "Създай",
-        "variant": "primary",
-        "action": "create",
-        "storageKey": "newProjectDraft",
-        "redirect": "/svganimator/frontend/platform/new-project"
-      }
-    ]
-  }
-  </script>
 
   <!-- Animated Background -->
   <div class="background">
@@ -160,17 +89,52 @@
     </div>
   </main>
 
+  <!-- ✅ Inline InfoModal -->
+  <div class="info-modal-overlay" id="infoModalOverlay">
+    <div class="info-modal" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">
+      <div class="info-modal-header">
+        <h2 class="info-modal-title" id="infoModalTitle">Информация</h2>
+        <button class="info-modal-close" id="infoModalClose" aria-label="Затвори">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="info-modal-body" id="infoModalBody">
+        <!-- items injected -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Inline ConfirmationModal -->
+  <div class="confirm-modal-overlay" id="confirmModalOverlay">
+    <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+      <div class="confirm-modal-header">
+        <h2 class="confirm-modal-title" id="confirmModalTitle">Потвърждение</h2>
+        <button class="confirm-modal-close" id="confirmModalClose" aria-label="Затвори">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="confirm-modal-body">
+        <p class="confirm-modal-message" id="confirmModalMessage"></p>
+      </div>
+
+      <div class="confirm-modal-footer">
+        <button class="confirm-btn confirm-btn-cancel" id="confirmModalCancel">Откажи</button>
+        <button class="confirm-btn confirm-btn-danger" id="confirmModalConfirm">Изтрий</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="/svganimator/frontend/src/components/layout/Navbar/index.js" type="module"></script>
 
-  <!-- Modals (components) -->
-  <script src="/svganimator/frontend/src/components/modals/InfoModal/index.js"></script>
-  <script src="/svganimator/frontend/src/components/modals/ConfirmationModal/index.js"></script>
-  
-  <!-- UI (components) -->
-  <script src="/svganimator/frontend/src/components/ui/Form/index.js"></script>
-
-  <!-- Page script -->
-  <script src="/svganimator/frontend/src/views/platform/my-projects/index.js"></script>
+  <script type="module" src="/svganimator/frontend/src/views/platform/my-projects/index.js"></script>
 </body>
 </html>

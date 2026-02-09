@@ -1,559 +1,615 @@
-const sampleProjects = [
-  {
-    id: 1,
-    name: 'Анимирано лого',
-    image: '',
-    fps: 60,
-    duration: '3.5s',
-    createdAt: '2024-01-15',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '1920x1080' },
-      { name: 'Кадри', value: '210' },
-      { name: 'Файлов размер', value: '45 KB' },
-      { name: 'Easing', value: 'ease-in-out' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Loading спинер',
-    image: '',
-    fps: 30,
-    duration: '2s',
-    createdAt: '2024-01-14',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '200x200' },
-      { name: 'Кадри', value: '60' },
-      { name: 'Файлов размер', value: '12 KB' },
-      { name: 'Easing', value: 'linear' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Иконка меню',
-    image: '',
-    fps: 60,
-    duration: '0.5s',
-    createdAt: '2024-01-13',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '24x24' },
-      { name: 'Кадри', value: '30' },
-      { name: 'Файлов размер', value: '8 KB' },
-      { name: 'Easing', value: 'cubic-bezier' },
-      { name: 'Цикличност', value: 'Не' }
-    ]
-  },
-  {
-    id: 4,
-    name: 'Вълнова анимация',
-    image: '',
-    fps: 60,
-    duration: '4s',
-    createdAt: '2024-01-12',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '1920x400' },
-      { name: 'Кадри', value: '240' },
-      { name: 'Файлов размер', value: '28 KB' },
-      { name: 'Easing', value: 'sine' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 5,
-    name: 'Прогрес бар',
-    image: '',
-    fps: 30,
-    duration: '1.5s',
-    createdAt: '2024-01-11',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '400x20' },
-      { name: 'Кадри', value: '45' },
-      { name: 'Файлов размер', value: '6 KB' },
-      { name: 'Easing', value: 'ease-out' },
-      { name: 'Цикличност', value: 'Не' }
-    ]
-  },
-  {
-    id: 6,
-    name: 'Пулсиращ бутон',
-    image: '',
-    fps: 60,
-    duration: '2s',
-    createdAt: '2024-01-10',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '200x60' },
-      { name: 'Кадри', value: '120' },
-      { name: 'Файлов размер', value: '15 KB' },
-      { name: 'Easing', value: 'ease-in-out' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 7,
-    name: 'Летящи частици',
-    image: '',
-    fps: 60,
-    duration: '5s',
-    createdAt: '2024-01-09',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '1920x1080' },
-      { name: 'Кадри', value: '300' },
-      { name: 'Файлов размер', value: '85 KB' },
-      { name: 'Easing', value: 'linear' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 8,
-    name: 'Морфинг форми',
-    image: '',
-    fps: 60,
-    duration: '3s',
-    createdAt: '2024-01-08',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '400x400' },
-      { name: 'Кадри', value: '180' },
-      { name: 'Файлов размер', value: '32 KB' },
-      { name: 'Easing', value: 'ease-in-out' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  },
-  {
-    id: 9,
-    name: 'Текстов ефект',
-    image: '',
-    fps: 30,
-    duration: '2.5s',
-    createdAt: '2024-01-07',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '600x100' },
-      { name: 'Кадри', value: '75' },
-      { name: 'Файлов размер', value: '18 KB' },
-      { name: 'Easing', value: 'cubic-bezier' },
-      { name: 'Цикличност', value: 'Не' }
-    ]
-  },
-  {
-    id: 10,
-    name: 'Инфографика',
-    image: '',
-    fps: 60,
-    duration: '4s',
-    createdAt: '2024-01-06',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '800x600' },
-      { name: 'Кадри', value: '240' },
-      { name: 'Файлов размер', value: '56 KB' },
-      { name: 'Easing', value: 'ease-out' },
-      { name: 'Цикличност', value: 'Не' }
-    ]
-  },
-  {
-    id: 11,
-    name: 'Социална икона',
-    image: '',
-    fps: 60,
-    duration: '1s',
-    createdAt: '2024-01-05',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '48x48' },
-      { name: 'Кадри', value: '60' },
-      { name: 'Файлов размер', value: '10 KB' },
-      { name: 'Easing', value: 'spring' },
-      { name: 'Цикличност', value: 'Не' }
-    ]
-  },
-  {
-    id: 12,
-    name: 'Hero анимация',
-    image: '',
-    fps: 60,
-    duration: '6s',
-    createdAt: '2024-01-04',
-    info: [
-      { name: 'Формат', value: 'SVG' },
-      { name: 'Размер', value: '1920x800' },
-      { name: 'Кадри', value: '360' },
-      { name: 'Файлов размер', value: '120 KB' },
-      { name: 'Easing', value: 'ease-in-out' },
-      { name: 'Цикличност', value: 'Да' }
-    ]
-  }
-];
+import { getAllAnimationsRequest } from "/svganimator/frontend/src/services/animations.js";
 
+/* =========================
+   Inline InfoModal
+========================= */
+function initInfoModal() {
+  const overlay = document.getElementById("infoModalOverlay");
+  const closeBtn = document.getElementById("infoModalClose");
+  const titleEl = document.getElementById("infoModalTitle");
+  const bodyEl = document.getElementById("infoModalBody");
+
+  if (!overlay || !closeBtn || !titleEl || !bodyEl) {
+    console.warn("[InfoModal] Missing DOM nodes (inline).");
+    return;
+  }
+
+  const escapeHtml = (str) => {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  };
+
+  const open = ({ title = "Информация", items = [] } = {}) => {
+    titleEl.textContent = title;
+
+    bodyEl.innerHTML = (items || [])
+      .map(
+        (item) => `
+        <div class="info-item">
+          <span class="info-label">${escapeHtml(item?.name ?? "")}</span>
+          <span class="info-value">${escapeHtml(item?.value ?? "")}</span>
+        </div>
+      `
+      )
+      .join("");
+
+    overlay.classList.add("active");
+    document.body.style.overflow = "hidden";
+  };
+
+  const close = () => {
+    overlay.classList.remove("active");
+    document.body.style.overflow = "";
+  };
+
+  closeBtn.addEventListener("click", close);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("active")) close();
+  });
+
+  window.InfoModal = { open, close };
+}
+
+/* =========================
+   Inline ConfirmationModal
+========================= */
+function initConfirmationModal() {
+  const overlay = document.getElementById("confirmModalOverlay");
+  const closeBtn = document.getElementById("confirmModalClose");
+  const titleEl = document.getElementById("confirmModalTitle");
+  const msgEl = document.getElementById("confirmModalMessage");
+  const cancelBtn = document.getElementById("confirmModalCancel");
+  const confirmBtn = document.getElementById("confirmModalConfirm");
+
+  if (!overlay || !closeBtn || !titleEl || !msgEl || !cancelBtn || !confirmBtn) {
+    console.warn("[ConfirmationModal] Missing DOM nodes (inline).");
+    return;
+  }
+
+  let resolver = null;
+
+  const cleanupResolve = (value) => {
+    overlay.classList.remove("active");
+    document.body.style.overflow = "";
+
+    const r = resolver;
+    resolver = null;
+    if (r) r(value);
+  };
+
+  const open = ({
+    title = "Потвърждение",
+    message = "",
+    confirmText = "OK",
+    cancelText = "Откажи",
+  } = {}) => {
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+
+    overlay.classList.add("active");
+    document.body.style.overflow = "hidden";
+
+    return new Promise((resolve) => {
+      resolver = resolve;
+    });
+  };
+
+  const close = () => cleanupResolve(false);
+
+  closeBtn.addEventListener("click", close);
+  cancelBtn.addEventListener("click", () => cleanupResolve(false));
+  confirmBtn.addEventListener("click", () => cleanupResolve(true));
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) cleanupResolve(false);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("active")) {
+      cleanupResolve(false);
+    }
+  });
+
+  window.ConfirmationModal = { open, close };
+}
+
+/* =========================
+   Helpers (SVG + formatting)
+========================= */
+function formatSeconds(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n)) return "—";
+  if (Math.abs(n - Math.round(n)) < 1e-9) return `${Math.round(n)}s`;
+  return `${n.toFixed(1)}s`;
+}
+
+function formatDateBg(createdAt) {
+  if (!createdAt) return "—";
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("bg-BG", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function safeJsonParse(str) {
+  if (!str || typeof str !== "string") return null;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Basic SVG sanitizer:
+ * - removes <script> and <foreignObject>
+ * - removes attributes starting with "on"
+ * - removes href/xlink:href with javascript:
+ */
+function sanitizeSvg(svgText) {
+  if (!svgText || typeof svgText !== "string") return "";
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, "image/svg+xml");
+
+  const svg = doc.querySelector("svg");
+  if (!svg) return "";
+
+  // remove dangerous nodes
+  doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
+
+  // remove event handlers and js links
+  doc.querySelectorAll("*").forEach((el) => {
+    [...el.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = String(attr.value || "").trim().toLowerCase();
+
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      }
+
+      if ((name === "href" || name === "xlink:href") && value.startsWith("javascript:")) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  // enforce viewbox fit if missing
+  if (!svg.getAttribute("viewBox")) {
+    const w = svg.getAttribute("width");
+    const h = svg.getAttribute("height");
+    const wNum = w ? parseFloat(w) : NaN;
+    const hNum = h ? parseFloat(h) : NaN;
+    if (Number.isFinite(wNum) && Number.isFinite(hNum)) {
+      svg.setAttribute("viewBox", `0 0 ${wNum} ${hNum}`);
+    }
+  }
+
+  // make sure it scales nicely in container
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+  return svg.outerHTML;
+}
+
+function extractDimensionsFromSvg(svgText) {
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgText, "image/svg+xml");
+    const svg = doc.querySelector("svg");
+    if (!svg) return null;
+
+    const wAttr = svg.getAttribute("width");
+    const hAttr = svg.getAttribute("height");
+    const vb = svg.getAttribute("viewBox");
+
+    const parseDim = (v) => {
+      if (!v) return null;
+      const n = parseFloat(String(v).replace("px", "").trim());
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const w = parseDim(wAttr);
+    const h = parseDim(hAttr);
+    if (w && h) return { w, h };
+
+    if (vb) {
+      const parts = vb.split(/[,\s]+/).map((x) => parseFloat(x)).filter((x) => Number.isFinite(x));
+      if (parts.length === 4) {
+        return { w: parts[2], h: parts[3] };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function estimateSvgSizeKb(svgText) {
+  // approximate UTF-8 bytes
+  const bytes = new Blob([String(svgText || "")]).size;
+  return Math.max(1, Math.round(bytes / 1024));
+}
+
+function pickFromSettings(settings, keys) {
+  if (!settings || typeof settings !== "object") return null;
+  for (const k of keys) {
+    if (k in settings && settings[k] != null && settings[k] !== "") return settings[k];
+  }
+  return null;
+}
+
+/* =========================
+   Mapping backend -> UI model
+========================= */
+function mapApiAnimationToProject(item) {
+  const anim = item?.animation || {};
+  const segments = Array.isArray(item?.animation_segments) ? item.animation_segments : [];
+
+  const settings = safeJsonParse(anim.animation_settings) || {};
+
+  const fps = Number(pickFromSettings(settings, ["fps"])) || 60; // ignore loop per request
+  const durationSec = Number(anim.duration);
+
+  const startingSvg = String(anim.starting_svg || "");
+  const svgPreview = sanitizeSvg(startingSvg);
+
+  // dimensions (prefer settings, fallback svg)
+  const wSetting = Number(pickFromSettings(settings, ["width", "w", "canvasWidth", "exportWidth"]));
+  const hSetting = Number(pickFromSettings(settings, ["height", "h", "canvasHeight", "exportHeight"]));
+  let dims = (Number.isFinite(wSetting) && Number.isFinite(hSetting)) ? { w: wSetting, h: hSetting } : null;
+  if (!dims) dims = extractDimensionsFromSvg(startingSvg);
+
+  // file size (prefer settings, fallback estimate)
+  const sizeBytes = Number(pickFromSettings(settings, ["fileSizeBytes", "file_size_bytes", "bytes"]));
+  const sizeKbSetting = Number(pickFromSettings(settings, ["fileSizeKb", "file_size_kb", "size_kb"]));
+  let sizeKb = null;
+  if (Number.isFinite(sizeKbSetting) && sizeKbSetting > 0) sizeKb = Math.round(sizeKbSetting);
+  else if (Number.isFinite(sizeBytes) && sizeBytes > 0) sizeKb = Math.max(1, Math.round(sizeBytes / 1024));
+  else sizeKb = estimateSvgSizeKb(startingSvg);
+
+  return {
+    id: anim.id,
+    name: anim.name || "Без име",
+    createdAt: anim.created_at,
+    fps,
+    durationSec,
+    svgPreview, // sanitized outerHTML
+    dims,       // {w,h} or null
+    sizeKb,
+    segmentsCount: segments.length,
+    raw: item,
+  };
+}
+
+/* =========================
+   Dashboard
+========================= */
 class ProjectsDashboard {
   constructor() {
-    this.projects = [...sampleProjects];
-    this.filteredProjects = [...this.projects];
+    this.projects = [];
     this.currentPage = 1;
-    this.projectsPerPage = 6;
+    this.totalPages = 1;
+    this.searchText = "";
+    this.searchTimer = null;
 
     this.init();
   }
 
-  init() {
+  async init() {
     this.cacheElements();
     this.bindEvents();
-    this.renderProjects();
-    this.renderPagination();
+
+    // initial load
+    await this.loadProjects({ page: 1, searchText: "" });
+
     this.initParticles();
   }
 
   cacheElements() {
-    this.projectsGrid = document.getElementById('projectsGrid');
-    this.emptyState = document.getElementById('emptyState');
-    this.pagination = document.getElementById('pagination');
-    this.paginationNumbers = document.getElementById('paginationNumbers');
-    this.prevPageBtn = document.getElementById('prevPage');
-    this.nextPageBtn = document.getElementById('nextPage');
-    this.searchInput = document.getElementById('searchInput');
-    this.createNewBtn = document.getElementById('createNewBtn');
+    this.projectsGrid = document.getElementById("projectsGrid");
+    this.emptyState = document.getElementById("emptyState");
+    this.pagination = document.getElementById("pagination");
+    this.paginationNumbers = document.getElementById("paginationNumbers");
+    this.prevPageBtn = document.getElementById("prevPage");
+    this.nextPageBtn = document.getElementById("nextPage");
+    this.searchInput = document.getElementById("searchInput");
+    this.createNewBtn = document.getElementById("createNewBtn");
   }
 
   bindEvents() {
-    this.searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
+    this.searchInput.addEventListener("input", (e) => {
+      const value = String(e.target.value || "");
+      this.handleSearch(value);
+    });
 
-    this.prevPageBtn.addEventListener('click', () => {
+    this.prevPageBtn.addEventListener("click", async () => {
       if (this.currentPage > 1) {
-        this.currentPage--;
-        this.renderProjects();
-        this.renderPagination();
+        await this.loadProjects({ page: this.currentPage - 1, searchText: this.searchText });
       }
     });
 
-    this.nextPageBtn.addEventListener('click', () => {
-      const totalPages = Math.ceil(this.filteredProjects.length / this.projectsPerPage);
-      if (this.currentPage < totalPages) {
-        this.currentPage++;
-        this.renderProjects();
-        this.renderPagination();
+    this.nextPageBtn.addEventListener("click", async () => {
+      if (this.currentPage < this.totalPages) {
+        await this.loadProjects({ page: this.currentPage + 1, searchText: this.searchText });
       }
     });
 
-    // ✅ Нов проект -> DynamicFormModal (конфиг от project.html)
-    this.createNewBtn.addEventListener('click', () => {
-      this.openNewProjectModal();
-    });
-  }
-
-  // ✅ Четем конфигурацията от project.html (script#newProjectModalConfig)
-  getNewProjectModalConfig() {
-    const el = document.getElementById('newProjectModalConfig');
-    if (!el) return null;
-
-    try {
-      const raw = el.textContent || el.innerText || '';
-      return JSON.parse(raw);
-    } catch (e) {
-      console.error('Невалиден JSON в #newProjectModalConfig', e);
-      return null;
-    }
-  }
-
-  // ✅ Превръщаме buttons от HTML (action-based) в реални handlers (onClick functions)
-  buildButtonsFromHtmlConfig(buttonDefs = []) {
-    const actionMap = {
-      close: (_values, api, _btnDef) => api.close(),
-
-      create: (values, api, btnDef) => {
-        const storageKey = btnDef.storageKey || 'newProjectDraft';
-        const redirect = btnDef.redirect || '/dashboard/create.html';
-
-        // Слагаме values, за да ги ползваш в create.html
-        try {
-          sessionStorage.setItem(storageKey, JSON.stringify({
-            values,
-            createdAt: Date.now()
-          }));
-        } catch (e) {}
-
-        api.close();
-        window.location.href = redirect;
-      }
-    };
-
-    return (buttonDefs || []).map((b) => {
-      const action = b.action;
-      const handler = actionMap[action];
-
-      return {
-        name: b.name || 'Бутон',
-        variant: b.variant || 'secondary',
-        onClick: (values, api) => {
-          if (typeof handler === 'function') {
-            handler(values, api, b);
-          } else {
-            // ако action не е разпознат -> просто затвори
-            api.close();
-          }
-        }
-      };
-    });
-  }
-
-  openNewProjectModal() {
-    if (!window.DynamicFormModal || typeof window.DynamicFormModal.open !== 'function') {
-      alert('DynamicFormModal не е зареден.');
-      return;
-    }
-
-    const cfg = this.getNewProjectModalConfig();
-
-    if (!cfg) {
-      // fallback ако нямаме конфиг
-      window.DynamicFormModal.open({
-        name: 'Нов проект',
-        options: [
-          { option_name: 'Име на проект', type: 'string', options_settings: { required: true } }
-        ],
-        buttons: [
-          { name: 'Затвори', variant: 'secondary', onClick: (_v, api) => api.close() }
-        ]
-      });
-      return;
-    }
-
-    const buttons = this.buildButtonsFromHtmlConfig(cfg.buttons);
-
-    window.DynamicFormModal.open({
-      name: cfg.name || 'Нов проект',
-      options: Array.isArray(cfg.options) ? cfg.options : [],
-      buttons
+    // Нов проект -> директно към /new-project
+    this.createNewBtn.addEventListener("click", () => {
+      window.location.href = "/svganimator/frontend/platform/new-project";
     });
   }
 
   handleSearch(query) {
-    const searchTerm = query.toLowerCase().trim();
+    const q = query.trim();
+    this.searchText = q;
 
-    if (!searchTerm) {
-      this.filteredProjects = [...this.projects];
-    } else {
-      this.filteredProjects = this.projects.filter(project =>
-        project.name.toLowerCase().includes(searchTerm)
-      );
+    // small debounce
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(async () => {
+      await this.loadProjects({ page: 1, searchText: this.searchText });
+    }, 250);
+  }
+
+  async loadProjects({ page = 1, searchText = "" } = {}) {
+    // optional: show skeleton/loading state
+    this.setLoading(true);
+
+    const res = await getAllAnimationsRequest({ page, searchText });
+
+    this.setLoading(false);
+
+    if (!res || res.success !== true) {
+      const msg =
+        res?.error?.message ||
+        "Грешка при зареждане на проектите.";
+
+      console.error("[my-projects] load error:", res);
+
+      this.projects = [];
+      this.currentPage = page;
+      this.totalPages = 1;
+
+      this.renderProjects();
+      this.renderPagination();
+
+      // show empty + message in console (UI може да го направим по-късно)
+      this.emptyState.style.display = "flex";
+      this.pagination.style.display = "none";
+      return;
     }
 
-    this.currentPage = 1;
+    const animations = Array.isArray(res.animations) ? res.animations : [];
+    const mapped = animations.map(mapApiAnimationToProject);
+
+    this.projects = mapped;
+    this.currentPage = Number(page) || 1;
+    this.totalPages = Number(res.numOfPages) || 1;
+
     this.renderProjects();
     this.renderPagination();
   }
 
-  renderProjects() {
-    const startIndex = (this.currentPage - 1) * this.projectsPerPage;
-    const endIndex = startIndex + this.projectsPerPage;
-    const projectsToShow = this.filteredProjects.slice(startIndex, endIndex);
+  setLoading(isLoading) {
+    // Минимално: disable pagination buttons и input
+    if (this.prevPageBtn) this.prevPageBtn.disabled = isLoading || this.currentPage <= 1;
+    if (this.nextPageBtn) this.nextPageBtn.disabled = isLoading || this.currentPage >= this.totalPages;
+    if (this.searchInput) this.searchInput.disabled = !!isLoading;
+  }
 
-    if (projectsToShow.length === 0) {
-      this.projectsGrid.innerHTML = '';
-      this.emptyState.style.display = 'flex';
-      this.pagination.style.display = 'none';
+  renderProjects() {
+    const projectsToShow = this.projects;
+
+    if (!projectsToShow || projectsToShow.length === 0) {
+      this.projectsGrid.innerHTML = "";
+      this.emptyState.style.display = "flex";
+      this.pagination.style.display = "none";
       return;
     }
 
-    this.emptyState.style.display = 'none';
-    this.pagination.style.display = 'flex';
+    this.emptyState.style.display = "none";
+    this.pagination.style.display = "flex";
 
-    this.projectsGrid.innerHTML = projectsToShow.map((project, index) => `
-      <div class="project-card" data-id="${project.id}" style="animation-delay: ${index * 0.1}s">
-        <div class="card-image">
-          ${project.image
-            ? `<img src="${project.image}" alt="${project.name}">`
-            : `<div class="card-image-placeholder">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="2"/>
-                  <path d="M16 24L22 18L28 24L36 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <circle cx="18" cy="18" r="2" fill="currentColor"/>
-                </svg>
-              </div>`
-          }
-          <div class="card-stats-overlay">
-            <div class="stat-badge">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M7 4V7.5L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    this.projectsGrid.innerHTML = projectsToShow
+      .map((project, index) => {
+        const durationLabel = formatSeconds(project.durationSec);
+        const fpsLabel = `${project.fps} FPS`;
+
+        const imageHtml = project.svgPreview
+          ? `<div class="card-svg-preview" aria-label="SVG preview">${project.svgPreview}</div>`
+          : `<div class="card-image-placeholder">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="2"/>
+                <path d="M16 24L22 18L28 24L36 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="18" cy="18" r="2" fill="currentColor"/>
               </svg>
-              <span>${project.duration}</span>
+            </div>`;
+
+        return `
+          <div class="project-card" data-id="${project.id}" style="animation-delay: ${index * 0.1}s">
+            <div class="card-image">
+              ${imageHtml}
+
+              <div class="card-stats-overlay">
+                <div class="stat-badge">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M7 4V7.5L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                  <span>${durationLabel}</span>
+                </div>
+                <div class="stat-badge">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 10V11.5C2 12.3284 2.67157 13 3.5 13H10.5C11.3284 13 12 12.3284 12 11.5V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>${fpsLabel}</span>
+                </div>
+              </div>
             </div>
-            <div class="stat-badge">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M2 10V11.5C2 12.3284 2.67157 13 3.5 13H10.5C11.3284 13 12 12.3284 12 11.5V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <path d="M7 1V9M7 9L4 6M7 9L10 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>${project.fps} FPS</span>
+
+            <div class="card-content">
+              <div class="card-header">
+                <h3 class="card-title">${project.name}</h3>
+                <button class="card-info-btn" data-id="${project.id}" aria-label="Информация">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M10 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="10" cy="6.5" r="0.75" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+
+              <p class="card-date">Създаден: ${formatDateBg(project.createdAt)}</p>
+
+              <div class="card-actions">
+                <button class="btn-card btn-card-delete" data-action="delete" data-id="${project.id}">
+                  Изтрий
+                </button>
+                <button class="btn-card btn-card-edit" data-action="edit" data-id="${project.id}">
+                  Редактирай
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        `;
+      })
+      .join("");
 
-        <div class="card-content">
-          <div class="card-header">
-            <h3 class="card-title">${project.name}</h3>
-            <button class="card-info-btn" data-id="${project.id}" aria-label="Информация">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M10 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <circle cx="10" cy="6.5" r="0.75" fill="currentColor"/>
-              </svg>
-            </button>
-          </div>
-
-          <p class="card-date">Създаден: ${this.formatDate(project.createdAt)}</p>
-
-          <div class="card-actions">
-            <button class="btn-card btn-card-delete" data-action="delete" data-id="${project.id}">
-              Изтрий
-            </button>
-            <button class="btn-card btn-card-edit" data-action="edit" data-id="${project.id}">
-              Редактирай
-            </button>
-          </div>
-        </div>
-      </div>
-    `).join('');
-
-    this.projectsGrid.querySelectorAll('.card-info-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    this.projectsGrid.querySelectorAll(".card-info-btn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const projectId = parseInt(btn.dataset.id);
+        const projectId = parseInt(btn.dataset.id, 10);
         this.openInfo(projectId);
       });
     });
 
-    this.projectsGrid.querySelectorAll('.btn-card[data-action]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    this.projectsGrid.querySelectorAll(".btn-card[data-action]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
         e.stopPropagation();
 
-        const projectId = parseInt(btn.dataset.id);
+        const projectId = parseInt(btn.dataset.id, 10);
         const action = btn.dataset.action;
 
-        if (action === 'edit') {
+        if (action === "edit") {
+          // смени този път към твоя реален editor, ако е различен
           window.location.href = `/dashboard/edit?id=${projectId}`;
           return;
         }
 
-        if (action === 'delete') {
+        if (action === "delete") {
           await this.deleteWithConfirmation(projectId);
           return;
         }
       });
     });
 
-    this.projectsGrid.querySelectorAll('.project-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const projectId = parseInt(card.dataset.id);
+    this.projectsGrid.querySelectorAll(".project-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const projectId = parseInt(card.dataset.id, 10);
+        // смени този път към твоя реален editor, ако е различен
         window.location.href = `/dashboard/edit?id=${projectId}`;
       });
     });
   }
 
   renderPagination() {
-    const totalPages = Math.ceil(this.filteredProjects.length / this.projectsPerPage);
+    const totalPages = Math.max(1, Number(this.totalPages) || 1);
+    const current = Math.min(Math.max(1, Number(this.currentPage) || 1), totalPages);
 
-    this.prevPageBtn.disabled = this.currentPage === 1;
-    this.nextPageBtn.disabled = this.currentPage === totalPages || totalPages === 0;
+    this.prevPageBtn.disabled = current === 1;
+    this.nextPageBtn.disabled = current === totalPages;
 
-    let paginationHTML = '';
+    let paginationHTML = "";
 
     for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+      if (i === 1 || i === totalPages || (i >= current - 1 && i <= current + 1)) {
         paginationHTML += `
-          <button class="page-number ${i === this.currentPage ? 'active' : ''}" data-page="${i}">
+          <button class="page-number ${i === current ? "active" : ""}" data-page="${i}">
             ${i}
           </button>
         `;
-      } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+      } else if (i === current - 2 || i === current + 2) {
         paginationHTML += `<span class="page-number" style="pointer-events: none;">...</span>`;
       }
     }
 
     this.paginationNumbers.innerHTML = paginationHTML;
 
-    this.paginationNumbers.querySelectorAll('.page-number[data-page]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.currentPage = parseInt(btn.dataset.page);
-        this.renderProjects();
-        this.renderPagination();
+    this.paginationNumbers.querySelectorAll(".page-number[data-page]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const page = parseInt(btn.dataset.page, 10);
+        await this.loadProjects({ page, searchText: this.searchText });
       });
     });
   }
 
   openInfo(projectId) {
-    const project = this.projects.find(p => p.id === projectId);
+    const project = this.projects.find((p) => p.id === projectId);
     if (!project) return;
 
-    if (!window.InfoModal || typeof window.InfoModal.open !== 'function') {
-      alert('InfoModal не е зареден.');
+    if (!window.InfoModal || typeof window.InfoModal.open !== "function") {
+      alert("InfoModal не е наличен.");
       return;
     }
 
+    const dimsText = project.dims ? `${Math.round(project.dims.w)}x${Math.round(project.dims.h)}` : "—";
+    const sizeText = project.sizeKb ? `${project.sizeKb} KB` : "—";
+
     window.InfoModal.open({
       title: project.name,
-      items: project.info
+      items: [
+        { name: "Формат", value: "SVG" },
+        { name: "Размер", value: dimsText },
+        { name: "Файлов размер", value: sizeText },
+        { name: "FPS", value: String(project.fps) },
+        { name: "Секунди", value: formatSeconds(project.durationSec) },
+        { name: "Сегменти", value: String(project.segmentsCount ?? 0) },
+      ],
     });
   }
 
   async deleteWithConfirmation(projectId) {
-    const project = this.projects.find(p => p.id === projectId);
+    const project = this.projects.find((p) => p.id === projectId);
     if (!project) return;
 
-    if (!window.ConfirmationModal || typeof window.ConfirmationModal.open !== 'function') {
+    if (!window.ConfirmationModal || typeof window.ConfirmationModal.open !== "function") {
       const ok = window.confirm(`Сигурен ли си, че искаш да изтриеш "${project.name}"?`);
-      if (ok) this.deleteProject(projectId);
+      if (ok) this.deleteProjectLocal(projectId);
       return;
     }
 
     const ok = await window.ConfirmationModal.open({
-      title: 'Потвърждение',
+      title: "Потвърждение",
       message: `Сигурен ли си, че искаш да изтриеш "${project.name}"?`,
-      confirmText: 'Изтрий',
-      cancelText: 'Откажи'
+      confirmText: "Изтрий",
+      cancelText: "Откажи",
     });
 
-    if (ok) this.deleteProject(projectId);
+    if (ok) this.deleteProjectLocal(projectId);
   }
 
-  deleteProject(projectId) {
-    this.projects = this.projects.filter(p => p.id !== projectId);
-
-    const query = (this.searchInput?.value || '').toLowerCase().trim();
-    if (!query) {
-      this.filteredProjects = [...this.projects];
-    } else {
-      this.filteredProjects = this.projects.filter(p => p.name.toLowerCase().includes(query));
-    }
-
-    const totalPages = Math.max(1, Math.ceil(this.filteredProjects.length / this.projectsPerPage));
-    if (this.currentPage > totalPages) this.currentPage = totalPages;
-
-    if (window.InfoModal && typeof window.InfoModal.close === 'function') {
-      window.InfoModal.close();
-    }
-
+  deleteProjectLocal(projectId) {
+    // Засега само UI remove (ако имаш delete endpoint, ще го вържем после)
+    this.projects = this.projects.filter((p) => p.id !== projectId);
     this.renderProjects();
     this.renderPagination();
   }
 
-  formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('bg-BG', { year: 'numeric', month: 'long', day: 'numeric' });
-  }
-
   initParticles() {
-    const canvas = document.getElementById('particleCanvas');
+    const canvas = document.getElementById("particleCanvas");
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     let particles = [];
     let mouseX = 0;
     let mouseY = 0;
@@ -574,7 +630,7 @@ class ProjectsDashboard {
           vx: (Math.random() - 0.5) * 0.5,
           vy: (Math.random() - 0.5) * 0.5,
           radius: Math.random() * 2 + 1,
-          opacity: Math.random() * 0.5 + 0.2
+          opacity: Math.random() * 0.5 + 0.2,
         });
       }
     };
@@ -603,7 +659,7 @@ class ProjectsDashboard {
         ctx.fillStyle = `rgba(99, 102, 241, ${particle.opacity})`;
         ctx.fill();
 
-        particles.slice(i + 1).forEach(otherParticle => {
+        particles.slice(i + 1).forEach((otherParticle) => {
           const dx2 = particle.x - otherParticle.x;
           const dy2 = particle.y - otherParticle.y;
           const distance2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
@@ -625,24 +681,20 @@ class ProjectsDashboard {
     createParticles();
     drawParticles();
 
-    window.addEventListener('resize', () => {
+    window.addEventListener("resize", () => {
       resize();
       createParticles();
     });
 
-    document.addEventListener('mousemove', (e) => {
+    document.addEventListener("mousemove", (e) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
     });
   }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    if (window.InfoModalReady) await window.InfoModalReady;
-    if (window.ConfirmationModalReady) await window.ConfirmationModalReady;
-    if (window.DynamicFormModalReady) await window.DynamicFormModalReady;
-  } catch (e) {}
-
+document.addEventListener("DOMContentLoaded", () => {
+  initInfoModal();
+  initConfirmationModal();
   new ProjectsDashboard();
 });
