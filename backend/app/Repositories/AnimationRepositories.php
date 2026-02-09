@@ -160,7 +160,7 @@ class AnimationRepositories
         if ($page < 1) {
             return [
                 "ok" => false,
-                "error" => "Invalid page",
+                "error" => "Невалидна страница",
                 "items" => []
             ];
         }
@@ -195,7 +195,7 @@ class AnimationRepositories
             "numOfPages" => $totalPages
         ];
     }
-    
+
     private static function getPerPage(): int
     {
         $perPage = (int)($_ENV["NUM_OF_ANIMATIONS_PER_PAGE"] ?? 20);
@@ -235,7 +235,7 @@ class AnimationRepositories
         if (($totalPages === 0 && $page !== 1) || ($totalPages > 0 && $page > $totalPages)) {
             return [
                 "ok" => false,
-                "error" => "Page out of range",
+                "error" => "Няма страница с такъв номер",
                 "items" => []
             ];
         }
