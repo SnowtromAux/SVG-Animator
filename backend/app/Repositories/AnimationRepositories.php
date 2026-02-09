@@ -53,7 +53,7 @@ class AnimationRepositories
         int $animationId,
         string $animationSettings,
         string $animationName,
-        int $totalDuration,
+        float $totalDuration,
         array $animationSegments
     ): bool {
         DataBase::transaction(
@@ -69,7 +69,7 @@ class AnimationRepositories
                 DataBase::exec(
                     $db,
                     $sql_update,
-                    "ssii",
+                    "ssdi",
                     [$animationSettings, $animationName, $totalDuration, $animationId]
                 );
 
@@ -90,23 +90,31 @@ class AnimationRepositories
                                 step,
                                 animation_data,
                                 easing,
-                                duration
+                                duration,
+                                start_at,
+                                end_at
                                 ) 
-                                VALUES (?,?,?,?,?);";
+                                VALUES (?,?,?,?,?,?,?);";
 
                 foreach ($animationSegments as $segment) {
-                    DataBase::exec(
-                        $db,
-                        $sql_segment,
-                        "iissi",
-                        [
-                            $animationId,
-                            (int)$segment["step"],
-                            (string)$segment["animation_data"],
-                            (string)$segment["easing"],
-                            (int)$segment["duration"],
-                        ]
-                    );
+                    if (number_format((float)$segment["end_at"], 2) < number_format((float)$segment["start_at"], 2)){
+                        throw new Exception("Не може start_at да е по-голямо от end_at");
+                    }
+
+                        DataBase::exec(
+                            $db,
+                            $sql_segment,
+                            "iissddd",
+                            [
+                                $animationId,
+                                (int)$segment["step"],
+                                (string)$segment["animation_data"],
+                                (string)$segment["easing"],
+                                number_format((float)$segment["end_at"] - (float)$segment["start_at"], 2),
+                                (float)$segment["start_at"],
+                                (float)$segment["end_at"]
+                            ]
+                        );
                 }
             }
         );
@@ -143,7 +151,9 @@ class AnimationRepositories
             $seg["id"] = (int)$seg["id"];
             $seg["animation_id"] = (int)$seg["animation_id"];
             $seg["step"] = (int)$seg["step"];
-            $seg["duration"] = (int)$seg["duration"];
+            $seg["duration"] = (float)$seg["duration"];
+            $seg["end_at"] = (float)$seg["end_at"];
+            $seg["start_at"] = (float)$seg["start_at"];
         }
         unset($seg);
 
@@ -284,19 +294,21 @@ class AnimationRepositories
     private static function fetchSegmentsByAnimationId(mysqli $db, int $animationId): array
     {
         $sql = "
-        SELECT id, animation_id, step, animation_data, easing, duration
+        SELECT id, animation_id, step, animation_data, easing, duration, start_at, end_at
         FROM animation_segment
         WHERE animation_id = ?
         ORDER BY step ASC;
         ";
 
-        $segments = DataBase::fetchAll($db, $sql, "i", [$animationId]);
+        $segments = DataBase::fetchAll($db, $sql, "d", [$animationId]);
 
         foreach ($segments as &$seg) {
             $seg["id"] = (int)$seg["id"];
             $seg["animation_id"] = (int)$seg["animation_id"];
             $seg["step"] = (int)$seg["step"];
-            $seg["duration"] = (int)$seg["duration"];
+            $seg["duration"] = (float)$seg["duration"];
+            $seg["start_at"] = (float)$seg["start_at"];
+            $seg["end_at"] = (float)$seg["end_at"];
         }
         unset($seg);
 
