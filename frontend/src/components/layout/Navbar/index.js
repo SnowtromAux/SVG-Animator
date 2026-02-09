@@ -2,14 +2,15 @@ import { logoutRequest } from "../../../services/auth.js";
 
 class Navbar {
   constructor() {
-    this.BASE = '/svganimator/frontend';
+    this.BASE = "/svganimator/frontend";
 
     this.navbarContainer = null;
 
     this.currentUser = {
-      name: 'Потребител',
-      avatar: '',
-      role: 'Animator'
+      name: "Потребител",
+      avatar: "",
+      role: "Аниматор",
+      email: ""
     };
 
     this.navItems = [
@@ -17,10 +18,7 @@ class Navbar {
         id: "my-projects",
         label: "Моите проекти",
         href: `${this.BASE}/platform/my-projects`,
-        keys: [
-          "platform/my-projects",
-          `${this.BASE}/platform/my-projects`
-        ],
+        keys: ["platform/my-projects", `${this.BASE}/platform/my-projects`],
         active: true,
         svg: `
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -31,15 +29,11 @@ class Navbar {
           </svg>
         `
       },
-
       {
         id: "posts",
         label: "Постове",
         href: `${this.BASE}/platform/posts`,
-        keys: [
-          "platform/posts",
-          `${this.BASE}/platform/posts`
-        ],
+        keys: ["platform/posts", `${this.BASE}/platform/posts`],
         active: true,
         svg: `
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -50,24 +44,18 @@ class Navbar {
           </svg>
         `
       },
-
       {
         id: "my-posts",
         label: "Моите постове",
         href: `${this.BASE}/platform/my-posts`,
-        keys: [
-          "platform/my-posts",
-          `${this.BASE}/platform/my-posts`
-        ],
+        keys: ["platform/my-posts", `${this.BASE}/platform/my-posts`],
         active: true,
         svg: `
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <!-- user -->
             <path d="M8.5 11.5C10.1569 11.5 11.5 10.1569 11.5 8.5C11.5 6.84315 10.1569 5.5 8.5 5.5C6.84315 5.5 5.5 6.84315 5.5 8.5C5.5 10.1569 6.84315 11.5 8.5 11.5Z"
                   stroke="currentColor" stroke-width="1.5"/>
             <path d="M3.75 18.5C4.6 15.9 6.4 14.5 8.5 14.5C10.6 14.5 12.4 15.9 13.25 18.5"
                   stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <!-- post card -->
             <rect x="13.5" y="6.5" width="7" height="11" rx="2"
                   stroke="currentColor" stroke-width="1.5"/>
             <path d="M15.5 9H19.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -99,6 +87,7 @@ class Navbar {
     await this.loadNavbar();
 
     this.cacheElements();
+    this.bindAuthEvents(); // ✅ слуша auth:user-ready
     this.renderNav();
     this.applyActiveFromKeys();
 
@@ -108,57 +97,74 @@ class Navbar {
     this.updateNavCollapse();
   }
 
+  // ✅ Когато auth-guard запише localStorage, той dispatch-ва auth:user-ready
+  // Navbar слуша и обновява UI веднага (без рефреш).
+  bindAuthEvents() {
+    window.addEventListener("auth:user-ready", (e) => {
+      const { username, email } = (e && e.detail) || {};
+
+      if (typeof username === "string" && username) this.currentUser.name = username;
+      if (typeof email === "string" && email) this.currentUser.email = email;
+
+      this.updateUserUI();
+    });
+  }
+
   async loadNavbar() {
     try {
-      const response = await fetch(`${this.BASE}/src/components/Layout/Navbar/index.html`);
+      // ⚠️ при теб пътят в момента е с Layout (главно L),
+      // оставям го както го имаш, но ако папката ти е layout (малко l) — смени го.
+      const response = await fetch(
+        `${this.BASE}/src/components/Layout/Navbar/index.html`
+      );
       const html = await response.text();
 
-      this.navbarContainer = document.createElement('div');
-      this.navbarContainer.id = 'navbar-container';
+      this.navbarContainer = document.createElement("div");
+      this.navbarContainer.id = "navbar-container";
       this.navbarContainer.innerHTML = html;
 
-      const mount = document.getElementById('navbar-mount');
+      const mount = document.getElementById("navbar-mount");
       if (mount) mount.appendChild(this.navbarContainer);
       else document.body.insertBefore(this.navbarContainer, document.body.firstChild);
 
-      document.body.style.paddingTop = '72px';
+      document.body.style.paddingTop = "72px";
     } catch (error) {
-      console.error('Failed to load navbar:', error);
+      console.error("Failed to load navbar:", error);
     }
   }
 
   cacheElements() {
-    this.navbarEl = document.getElementById('appNavbar');
-    this.navbarLinksEl = document.getElementById('navbarLinks');
-    this.dropdownNavListEl = document.getElementById('dropdownNavList');
+    this.navbarEl = document.getElementById("appNavbar");
+    this.navbarLinksEl = document.getElementById("navbarLinks");
+    this.dropdownNavListEl = document.getElementById("dropdownNavList");
 
-    this.userMenuBtn = document.getElementById('userMenuBtn');
-    this.userDropdown = document.getElementById('userDropdown');
-    this.userMenuWrap = document.getElementById('userMenu');
+    this.userMenuBtn = document.getElementById("userMenuBtn");
+    this.userDropdown = document.getElementById("userDropdown");
+    this.userMenuWrap = document.getElementById("userMenu");
 
-    this.userNameEl = document.getElementById('userName');
-    this.userRoleEl = document.getElementById('userRole');
+    this.userNameEl = document.getElementById("userName");
+    this.userRoleEl = document.getElementById("userRole");
   }
 
   createNavLink(item, variant) {
-    const a = document.createElement('a');
+    const a = document.createElement("a");
 
     a.href = item.href;
-    a.setAttribute('data-nav-id', item.id);
+    a.setAttribute("data-nav-id", item.id);
 
     if (variant === "center") {
-      a.className = 'nav-link';
+      a.className = "nav-link";
       a.innerHTML = `${item.svg}<span>${this.escapeHtml(item.label)}</span>`;
     } else {
-      a.className = 'dropdown-item nav-item';
-      a.setAttribute('role', 'menuitem');
+      a.className = "dropdown-item nav-item";
+      a.setAttribute("role", "menuitem");
       a.innerHTML = `${item.svg}<span class="dropdown-item-label">${this.escapeHtml(item.label)}</span>`;
     }
 
     if (item.active === false) {
-      a.classList.add('disabled');
-      a.setAttribute('aria-disabled', 'true');
-      a.setAttribute('tabindex', '-1');
+      a.classList.add("disabled");
+      a.setAttribute("aria-disabled", "true");
+      a.setAttribute("tabindex", "-1");
     }
 
     return a;
@@ -167,8 +173,8 @@ class Navbar {
   renderNav() {
     if (!this.navbarLinksEl || !this.dropdownNavListEl) return;
 
-    this.navbarLinksEl.innerHTML = '';
-    this.dropdownNavListEl.innerHTML = '';
+    this.navbarLinksEl.innerHTML = "";
+    this.dropdownNavListEl.innerHTML = "";
 
     for (const item of this.navItems) {
       const centerLink = this.createNavLink(item, "center");
@@ -181,25 +187,25 @@ class Navbar {
 
   escapeHtml(str) {
     return String(str)
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;');
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
 
   normalizePath(p) {
-    if (!p) return '';
+    if (!p) return "";
     let s = String(p).trim();
 
     try {
-      if (s.startsWith('http://') || s.startsWith('https://')) {
+      if (s.startsWith("http://") || s.startsWith("https://")) {
         s = new URL(s).pathname;
       }
     } catch (_) {}
 
-    s = s.split('?')[0].split('#')[0];
-    s = s.replace(/\/+$/, '');
+    s = s.split("?")[0].split("#")[0];
+    s = s.replace(/\/+$/, "");
     return s;
   }
 
@@ -210,7 +216,7 @@ class Navbar {
 
     if (cp === k) return true;
 
-    const kWithSlash = k.startsWith('/') ? k : '/' + k;
+    const kWithSlash = k.startsWith("/") ? k : "/" + k;
     if (cp.endsWith(k)) return true;
     if (cp.endsWith(kWithSlash)) return true;
 
@@ -218,21 +224,23 @@ class Navbar {
   }
 
   clearActive() {
-    const all = document.querySelectorAll('[data-nav-id]');
-    all.forEach(el => {
-      el.classList.remove('active');
-      el.removeAttribute('aria-current');
+    const all = document.querySelectorAll("[data-nav-id]");
+    all.forEach((el) => {
+      el.classList.remove("active");
+      el.removeAttribute("aria-current");
     });
   }
 
   setActiveById(navId) {
     const els = document.querySelectorAll(`[data-nav-id="${navId}"]`);
-    els.forEach(el => {
-      const isDisabled = el.classList.contains('disabled') || el.getAttribute('aria-disabled') === 'true';
+    els.forEach((el) => {
+      const isDisabled =
+        el.classList.contains("disabled") ||
+        el.getAttribute("aria-disabled") === "true";
       if (isDisabled) return;
 
-      el.classList.add('active');
-      el.setAttribute('aria-current', 'page');
+      el.classList.add("active");
+      el.setAttribute("aria-current", "page");
     });
   }
 
@@ -259,14 +267,19 @@ class Navbar {
   updateNavCollapse() {
     if (!this.navbarEl || !this.navbarLinksEl) return;
 
+    if (window.innerWidth >= 1024) {
+      this.navbarEl.classList.remove("nav-collapsed");
+      return;
+    }
+
     const desiredGap = 40;
 
-    const wasCollapsed = this.navbarEl.classList.contains('nav-collapsed');
-    if (wasCollapsed) this.navbarEl.classList.remove('nav-collapsed');
+    const wasCollapsed = this.navbarEl.classList.contains("nav-collapsed");
+    if (wasCollapsed) this.navbarEl.classList.remove("nav-collapsed");
 
-    const container = this.navbarEl.querySelector('.navbar-container');
-    const brand = this.navbarEl.querySelector('.navbar-brand');
-    const user = this.navbarEl.querySelector('.navbar-user');
+    const container = this.navbarEl.querySelector(".navbar-container");
+    const brand = this.navbarEl.querySelector(".navbar-brand");
+    const user = this.navbarEl.querySelector(".navbar-user");
     const links = this.navbarLinksEl;
 
     if (!container || !brand || !user || !links) return;
@@ -281,32 +294,32 @@ class Navbar {
 
     const shouldCollapse = freeSpace < minFreeSpace;
 
-    if (shouldCollapse) this.navbarEl.classList.add('nav-collapsed');
-    else this.navbarEl.classList.remove('nav-collapsed');
+    if (shouldCollapse) this.navbarEl.classList.add("nav-collapsed");
+    else this.navbarEl.classList.remove("nav-collapsed");
   }
 
   openDropdown() {
     if (!this.userDropdown || !this.userMenuBtn) return;
-    this.userDropdown.classList.add('open');
-    this.userMenuBtn.setAttribute('aria-expanded', 'true');
+    this.userDropdown.classList.add("open");
+    this.userMenuBtn.setAttribute("aria-expanded", "true");
   }
 
   closeDropdown() {
     if (!this.userDropdown || !this.userMenuBtn) return;
-    this.userDropdown.classList.remove('open');
-    this.userMenuBtn.setAttribute('aria-expanded', 'false');
+    this.userDropdown.classList.remove("open");
+    this.userMenuBtn.setAttribute("aria-expanded", "false");
   }
 
   toggleDropdown() {
     if (!this.userDropdown) return;
-    const isOpen = this.userDropdown.classList.contains('open');
+    const isOpen = this.userDropdown.classList.contains("open");
     if (isOpen) this.closeDropdown();
     else this.openDropdown();
   }
 
   bindEvents() {
     if (this.userMenuBtn) {
-      this.userMenuBtn.addEventListener('click', (e) => {
+      this.userMenuBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         this.toggleDropdown();
@@ -317,42 +330,41 @@ class Navbar {
       if (!this.userMenuWrap) return;
       if (!this.userMenuWrap.contains(e.target)) this.closeDropdown();
     };
-    document.addEventListener('click', this.onDocClick);
+    document.addEventListener("click", this.onDocClick);
 
     this.onDocKeydown = (e) => {
-      if (e.key === 'Escape') this.closeDropdown();
+      if (e.key === "Escape") this.closeDropdown();
     };
-    document.addEventListener('keydown', this.onDocKeydown);
+    document.addEventListener("keydown", this.onDocKeydown);
 
-    document.addEventListener('click', (e) => {
+    document.addEventListener("click", (e) => {
       const target = e.target.closest('.disabled,[aria-disabled="true"]');
       if (!target) return;
-      if (target.tagName === 'A' || target.tagName === 'BUTTON') {
+      if (target.tagName === "A" || target.tagName === "BUTTON") {
         e.preventDefault();
         e.stopPropagation();
       }
     });
 
-    const logoutBtn = document.getElementById('logoutBtn');
+    const logoutBtn = document.getElementById("logoutBtn");
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', async () => {
+      logoutBtn.addEventListener("click", async () => {
         try {
           await logoutRequest();
         } catch (_) {
           // silent
         }
 
-        // clear both old and new keys
-        localStorage.removeItem('svg_animator_user');
-        localStorage.removeItem('user.username');
-        localStorage.removeItem('user.email');
+        localStorage.removeItem("svg_animator_user");
+        localStorage.removeItem("user.username");
+        localStorage.removeItem("user.email");
 
         window.location.href = `${this.BASE}/login`;
       });
     }
 
     this.onResize = () => this.updateNavCollapse();
-    window.addEventListener('resize', this.onResize);
+    window.addEventListener("resize", this.onResize);
 
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(() => this.updateNavCollapse()).catch(() => {});
@@ -360,15 +372,15 @@ class Navbar {
   }
 
   loadUserData() {
-    const lsUsername = localStorage.getItem('user.username');
-    const lsEmail = localStorage.getItem('user.email');
+    const lsUsername = localStorage.getItem("user.username");
+    const lsEmail = localStorage.getItem("user.email");
 
     if (lsUsername) {
       this.currentUser.name = lsUsername;
     }
 
     if (!lsUsername) {
-      const savedUser = localStorage.getItem('svg_animator_user');
+      const savedUser = localStorage.getItem("svg_animator_user");
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
@@ -376,35 +388,35 @@ class Navbar {
           if (parsed?.avatar) this.currentUser.avatar = parsed.avatar;
           if (parsed?.role) this.currentUser.role = parsed.role;
         } catch (e) {
-          console.error('Failed to parse user data:', e);
+          console.error("Failed to parse user data:", e);
         }
       }
     }
 
-    this.currentUser.email = lsEmail || this.currentUser.email || '';
+    this.currentUser.email = lsEmail || this.currentUser.email || "";
     this.updateUserUI();
   }
 
   updateUserUI() {
-    const userAvatarEl = document.getElementById('userAvatar');
+    const userAvatarEl = document.getElementById("userAvatar");
 
-    if (this.userNameEl) this.userNameEl.textContent = this.currentUser.name || 'Потребител';
-    if (this.userRoleEl) this.userRoleEl.textContent = this.currentUser.role || 'Animator';
+    if (this.userNameEl) this.userNameEl.textContent = this.currentUser.name || "Потребител";
+    if (this.userRoleEl) this.userRoleEl.textContent = this.currentUser.role || "Animator";
 
     if (userAvatarEl) {
       if (this.currentUser.avatar) userAvatarEl.src = this.currentUser.avatar;
-      else userAvatarEl.removeAttribute('src');
+      else userAvatarEl.removeAttribute("src");
     }
   }
 
   setUser(userData) {
     this.currentUser = { ...this.currentUser, ...userData };
-    localStorage.setItem('svg_animator_user', JSON.stringify(this.currentUser));
+    localStorage.setItem("svg_animator_user", JSON.stringify(this.currentUser));
     this.updateUserUI();
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener("DOMContentLoaded", () => {
   window.navbar = new Navbar();
   window.navbar.init();
 });
