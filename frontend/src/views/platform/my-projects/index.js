@@ -275,14 +275,36 @@ class ProjectsDashboard {
     this.searchText = "";
     this.searchTimer = null;
 
+    // ✅ важно: bind за pageshow handler
+    this.onPageShow = this.onPageShow.bind(this);
+
     this.init();
   }
 
   async init() {
     this.cacheElements();
     this.bindEvents();
+
+    // ✅ При първоначално зареждане
     await this.loadProjects({ page: 1, searchText: "" });
+
+    // ✅ Ако се върнеш назад (bfcache), pageshow ще се викне
+    window.addEventListener("pageshow", this.onPageShow);
+
     this.initParticles();
+  }
+
+  // ✅ Това оправя проблема (Back/Forward cache)
+  async onPageShow(event) {
+    // event.persisted === true => страницата е върната от bfcache
+    // navType 'back_forward' покрива някои браузъри/случаи
+    const navEntry = performance.getEntriesByType?.("navigation")?.[0];
+    const isBackForward = event?.persisted === true || navEntry?.type === "back_forward";
+
+    if (!isBackForward) return;
+
+    // Презареждаме данните, без да ресетваме текущото търсене/страница
+    await this.loadProjects({ page: this.currentPage || 1, searchText: this.searchText || "" });
   }
 
   cacheElements() {

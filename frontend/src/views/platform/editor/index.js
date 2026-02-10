@@ -1,8 +1,12 @@
-
 import { ANIMATION_PROPERTIES } from '../../../constants/animation-properties.js';
 import { DEFAULT_FPS, PX_PER_SECOND, MAX_SECONDS } from '../../../constants/default-settings.js';
 import { isAnimatableNode } from '../../../utils/svg-animatable.js';
-import { AnimationsService } from '../../../services/animations.js';
+
+import {
+  getAnimationRequest,
+  createAnimationRequest,
+  saveAnimationRequest
+} from '../../../services/animations.js';
 
 // ===== App =====
 class SvgAnimatorEditor {
@@ -50,7 +54,6 @@ class SvgAnimatorEditor {
     };
 
     this.DOM = {};
-    this.animationsService = new AnimationsService({ baseUrl: '/api' });
 
     // bind methods used as listeners
     this.handleFileUpload = this.handleFileUpload.bind(this);
@@ -98,6 +101,163 @@ class SvgAnimatorEditor {
     // expose for inline onclick handlers
     window.editStep = (index) => this.editStep(index);
     window.deleteStep = (index) => this.deleteStep(index);
+
+    // ✅ Load by URL param if exists
+    const urlAnimId = this.getAnimationIdFromUrl();
+    if (urlAnimId) {
+      this.state.animationId = urlAnimId;
+      this.loadAnimationById(urlAnimId);
+    }
+  }
+
+  // ===== URL helpers =====
+  getAnimationIdFromUrl() {
+    const url = new URL(window.location.href);
+    const id = url.searchParams.get('animation_id');
+    return id ? Number(id) : null;
+  }
+
+  setAnimationIdToUrl(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('animation_id', String(id));
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  // ===== Load animation from API =====
+  async loadAnimationById(animationId) {
+    try {
+      const res = await getAnimationRequest({ animationId });
+
+      if (!res?.success || !res.animation) {
+        this.showToast('error', 'Неуспешно зареждане на анимацията.');
+        return;
+      }
+
+      const anim = res.animation;
+
+      // name
+      if (anim.name) this.DOM.projectName.value = anim.name;
+
+      // load SVG first (this also rebuilds elements tree)
+      if (anim.starting_svg) {
+        this.loadSVG(anim.starting_svg);
+      } else {
+        this.showToast('error', 'Анимацията няма starting_svg.');
+        return;
+      }
+
+      // apply steps from backend segments
+      if (Array.isArray(anim.animation_segments)) {
+        this.applyLoadedAnimation(anim);
+      }
+
+      this.state.hasUnsavedChanges = false;
+      this.showToast('success', 'Анимацията е заредена');
+    } catch (e) {
+      console.error(e);
+      this.showToast('error', 'Грешка при зареждане на анимацията.');
+    }
+  }
+
+  safeParseJson(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  }
+
+  // backend: animation_data може да има много пропъртита.
+  // за момента: взимаме първото (както ти беше) – ако искаш split, кажи.
+  extractPropertyAndToValue(animObj) {
+    if (!animObj || typeof animObj !== 'object') return { property: null, toValue: null };
+    const keys = Object.keys(animObj);
+    if (!keys.length) return { property: null, toValue: null };
+    const property = keys[0];
+    return { property, toValue: animObj[property] };
+  }
+
+  // Convert backend animation -> UI steps
+  applyLoadedAnimation(anim) {
+    const segments = Array.isArray(anim.animation_segments) ? anim.animation_segments : [];
+    const sorted = [...segments].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
+
+    const steps = [];
+    let maxStepId = 0;
+
+    for (const seg of sorted) {
+      let elementData = null;
+
+      // 1) normal mapping (ако backend дава element_id / element_uid)
+      const elementUid = Number(seg.element_id ?? seg.element_uid);
+      if (!Number.isNaN(elementUid)) {
+        elementData = this.state.elements.find((el) => el.uid === elementUid) || null;
+      }
+
+      // 2) optional selector mapping
+      if (!elementData && seg.element_selector) {
+        const node = this.DOM.mainCanvas.querySelector(seg.element_selector);
+        if (node) elementData = this.state.elements.find((el) => el.element === node) || null;
+      }
+
+      // 3) fallback ако има точно 1 елемент
+      if (!elementData && this.state.elements.length === 1) {
+        elementData = this.state.elements[0];
+      }
+
+      if (!elementData) {
+        console.warn('[load] Segment skipped: missing element mapping', seg);
+        continue;
+      }
+
+      const animData = this.safeParseJson(seg.animation_data) || {};
+      const { property, toValue } = this.extractPropertyAndToValue(animData);
+      if (!property) continue;
+
+      // find label/type (best effort)
+      const tagName = elementData.tagName;
+      const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
+      const propMeta = props.properties.find((p) => p.name === property);
+      const propertyLabel = propMeta?.label || property;
+
+      const startTime = Number(seg.start_at ?? 0) || 0;
+      const duration =
+        Number(seg.duration ?? 0) ||
+        Math.max(0, (Number(seg.end_at ?? 0) || 0) - startTime);
+
+      const stepId = Number(seg.step ?? seg.id ?? 0) || 0;
+      maxStepId = Math.max(maxStepId, stepId);
+
+      steps.push({
+        id: stepId || (steps.length + 1),
+
+        elementPath: elementData.path,
+        elementUid: elementData.uid,
+        elementTag: elementData.tagName,
+        elementId: elementData.id,
+
+        property,
+        propertyLabel,
+
+        // FROM ще се резолвне live при playback, но за UI оставяме placeholder
+        fromValue: this.getResolvedAttributeForInput(elementData.element, property, propMeta?.type || ''),
+        toValue: String(toValue),
+
+        startTime,
+        duration: Math.max(0.05, duration),
+        easing: seg.easing || 'linear'
+      });
+    }
+
+    this.state.steps = steps;
+    this.state.stepCounter = maxStepId || steps.length;
+    this.state.currentStepIndex = steps.length ? 0 : -1;
+    this.state.editingStepIndex = null;
+
+    this.renderSteps();
+    this.updateTimeline();
+    this.updateStepNavigation();
+    this.updatePlayhead();
   }
 
   // ===== DOM Cache =====
@@ -321,12 +481,12 @@ class SvgAnimatorEditor {
     // Unsaved modal
     this.DOM.discardBtn.addEventListener('click', () => {
       this.hideModal(this.DOM.unsavedModal);
-      window.location.href = '/dashboard/my-projects.html';
+      window.location.href = 'my-projects';
     });
     this.DOM.saveAndCloseBtn.addEventListener('click', async () => {
       await this.handleSave();
       this.hideModal(this.DOM.unsavedModal);
-      window.location.href = '/dashboard/my-projects.html';
+      window.location.href = 'my-projects';
     });
 
     // Import URL modal
@@ -449,8 +609,6 @@ class SvgAnimatorEditor {
       btn.style.pointerEvents = isLocked ? 'none' : '';
       btn.style.opacity = isLocked ? '0.5' : '';
     });
-
-    // Disable dragging blocks by pointer handler guard (see onTimelinePointerDown)
   }
 
   // ===== File Upload =====
@@ -1429,12 +1587,11 @@ class SvgAnimatorEditor {
       block.style.left = `${step.startTime * PX_PER_SECOND}px`;
     }
 
-    // Update playhead time label (optional) is left alone.
     // Update steps table time live
     this.renderSteps();
   }
 
-  onTimelinePointerUp(e) {
+  onTimelinePointerUp() {
     if (!this.state.drag.active) return;
 
     const idx = this.state.drag.stepIndex;
@@ -1604,7 +1761,7 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // colors: allow #, rgb(), url(#...)
+    // colors
     const fromHex = this.parseCssColorToHex(from) || this.resolvePaintUrlToHex(from) || '';
     const toHex = this.parseCssColorToHex(to) || this.resolvePaintUrlToHex(to) || '';
 
@@ -1858,18 +2015,82 @@ class SvgAnimatorEditor {
     this.state.hasUnsavedChanges = true;
   }
 
+  // CREATE settings payload shape (както искаш)
+  buildCreateSettingsPayload() {
+    const s = this.state.settings;
+    return {
+      fps: s.fps,
+      viewbox: {
+        original: !!s.useOriginalViewBox,
+        minX: s.viewBox.minX,
+        minY: s.viewBox.minY,
+        width: s.viewBox.width,
+        height: s.viewBox.height
+      },
+      "center-positioning": !!s.keepCentered,
+      "canvas-background": s.transparentBg ? "transparent" : s.canvasBgColor
+    };
+  }
+
+  // steps -> backend segments
+  buildSaveSegmentsPayload() {
+    return this.state.steps.map((step, idx) => {
+      const animObj = { [step.property]: step.toValue };
+      const start = Number(step.startTime) || 0;
+      const dur = Number(step.duration) || 0;
+
+      return {
+        step: step.id ?? (idx + 1),
+        element_id: step.elementUid ?? null,
+        animation_data: JSON.stringify(animObj),
+        easing: step.easing || 'linear',
+        duration: dur,
+        start_at: start,
+        end_at: start + dur
+      };
+    });
+  }
+
   async handleSave() {
     try {
-      const animationData = {
-        animation_id: this.state.animationId || null,
-        name: this.DOM.projectName.value || 'Untitled',
-        settings: { ...this.state.settings },
-        segments: [...this.state.steps],
-        svgContent: this.DOM.mainCanvas.outerHTML
+      const svgText = this.DOM.mainCanvas?.outerHTML || '';
+      if (!svgText || this.DOM.mainCanvas.style.display === 'none') {
+        this.showToast('error', 'Няма зареден SVG за запазване.');
+        return;
+      }
+
+      // 1) Ако няма animationId -> CREATE
+      if (!this.state.animationId) {
+        const createRes = await createAnimationRequest({
+          name: this.DOM.projectName.value || 'Untitled',
+          svgText,
+          settings: this.buildCreateSettingsPayload()
+        });
+
+        if (!createRes?.success || !createRes?.id) {
+          this.showToast('error', 'Неуспешно създаване на анимацията');
+          return;
+        }
+
+        this.state.animationId = Number(createRes.id);
+        this.setAnimationIdToUrl(this.state.animationId);
+        this.showToast('success', 'Анимацията е създадена');
+      }
+
+      // 2) SAVE (PUT)
+      const savePayload = {
+        animation_id: this.state.animationId,
+        animation_name: this.DOM.projectName.value || 'Untitled',
+        animation_settings: JSON.stringify(this.state.settings),
+        animation_segments: this.buildSaveSegmentsPayload()
       };
 
-      const { animation_id } = await this.animationsService.saveAnimation(animationData);
-      this.state.animationId = animation_id;
+      const saveRes = await saveAnimationRequest(savePayload);
+
+      if (!saveRes?.success) {
+        this.showToast('error', 'Грешка при запазване.');
+        return;
+      }
 
       this.state.hasUnsavedChanges = false;
 
@@ -1892,7 +2113,8 @@ class SvgAnimatorEditor {
           <span>Запази</span>
         `;
       }, 2000);
-    } catch {
+    } catch (e) {
+      console.error(e);
       this.showToast('error', 'Грешка при запазване.');
     }
   }
@@ -1901,7 +2123,7 @@ class SvgAnimatorEditor {
     if (this.state.hasUnsavedChanges) {
       this.showModal(this.DOM.unsavedModal);
     } else {
-      window.location.href = '/dashboard/my-projects.html';
+      window.location.href = 'my-projects';
     }
   }
 
