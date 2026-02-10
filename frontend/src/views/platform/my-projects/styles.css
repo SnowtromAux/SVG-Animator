@@ -470,7 +470,7 @@
 }
 
 /* =========================================================
-   INLINE MODALS (InfoModal + ConfirmationModal)
+   INLINE MODALS
 ========================================================= */
 
 /* ===== InfoModal ===== */
@@ -549,7 +549,6 @@
   overflow-y: auto;
 }
 
-/* Info Items */
 .info-item {
   display: flex;
   align-items: center;

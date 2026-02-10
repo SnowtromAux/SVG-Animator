@@ -1,4 +1,7 @@
-import { getAllAnimationsRequest } from "/svganimator/frontend/src/services/animations.js";
+import {
+  getAllAnimationsRequest,
+  deleteAnimationRequest,
+} from "/svganimator/frontend/src/services/animations.js";
 
 /* =========================
    Inline InfoModal
@@ -149,12 +152,6 @@ function safeJsonParse(str) {
   }
 }
 
-/**
- * Basic SVG sanitizer:
- * - removes <script> and <foreignObject>
- * - removes attributes starting with "on"
- * - removes href/xlink:href with javascript:
- */
 function sanitizeSvg(svgText) {
   if (!svgText || typeof svgText !== "string") return "";
 
@@ -164,26 +161,20 @@ function sanitizeSvg(svgText) {
   const svg = doc.querySelector("svg");
   if (!svg) return "";
 
-  // remove dangerous nodes
   doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
 
-  // remove event handlers and js links
   doc.querySelectorAll("*").forEach((el) => {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = String(attr.value || "").trim().toLowerCase();
 
-      if (name.startsWith("on")) {
-        el.removeAttribute(attr.name);
-      }
-
+      if (name.startsWith("on")) el.removeAttribute(attr.name);
       if ((name === "href" || name === "xlink:href") && value.startsWith("javascript:")) {
         el.removeAttribute(attr.name);
       }
     });
   });
 
-  // enforce viewbox fit if missing
   if (!svg.getAttribute("viewBox")) {
     const w = svg.getAttribute("width");
     const h = svg.getAttribute("height");
@@ -194,9 +185,7 @@ function sanitizeSvg(svgText) {
     }
   }
 
-  // make sure it scales nicely in container
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-
   return svg.outerHTML;
 }
 
@@ -223,9 +212,7 @@ function extractDimensionsFromSvg(svgText) {
 
     if (vb) {
       const parts = vb.split(/[,\s]+/).map((x) => parseFloat(x)).filter((x) => Number.isFinite(x));
-      if (parts.length === 4) {
-        return { w: parts[2], h: parts[3] };
-      }
+      if (parts.length === 4) return { w: parts[2], h: parts[3] };
     }
     return null;
   } catch {
@@ -234,7 +221,6 @@ function extractDimensionsFromSvg(svgText) {
 }
 
 function estimateSvgSizeKb(svgText) {
-  // approximate UTF-8 bytes
   const bytes = new Blob([String(svgText || "")]).size;
   return Math.max(1, Math.round(bytes / 1024));
 }
@@ -253,22 +239,19 @@ function pickFromSettings(settings, keys) {
 function mapApiAnimationToProject(item) {
   const anim = item?.animation || {};
   const segments = Array.isArray(item?.animation_segments) ? item.animation_segments : [];
-
   const settings = safeJsonParse(anim.animation_settings) || {};
 
-  const fps = Number(pickFromSettings(settings, ["fps"])) || 60; // ignore loop per request
+  const fps = Number(pickFromSettings(settings, ["fps"])) || 60;
   const durationSec = Number(anim.duration);
 
   const startingSvg = String(anim.starting_svg || "");
   const svgPreview = sanitizeSvg(startingSvg);
 
-  // dimensions (prefer settings, fallback svg)
   const wSetting = Number(pickFromSettings(settings, ["width", "w", "canvasWidth", "exportWidth"]));
   const hSetting = Number(pickFromSettings(settings, ["height", "h", "canvasHeight", "exportHeight"]));
   let dims = (Number.isFinite(wSetting) && Number.isFinite(hSetting)) ? { w: wSetting, h: hSetting } : null;
   if (!dims) dims = extractDimensionsFromSvg(startingSvg);
 
-  // file size (prefer settings, fallback estimate)
   const sizeBytes = Number(pickFromSettings(settings, ["fileSizeBytes", "file_size_bytes", "bytes"]));
   const sizeKbSetting = Number(pickFromSettings(settings, ["fileSizeKb", "file_size_kb", "size_kb"]));
   let sizeKb = null;
@@ -282,8 +265,8 @@ function mapApiAnimationToProject(item) {
     createdAt: anim.created_at,
     fps,
     durationSec,
-    svgPreview, // sanitized outerHTML
-    dims,       // {w,h} or null
+    svgPreview,
+    dims,
     sizeKb,
     segmentsCount: segments.length,
     raw: item,
@@ -307,10 +290,7 @@ class ProjectsDashboard {
   async init() {
     this.cacheElements();
     this.bindEvents();
-
-    // initial load
     await this.loadProjects({ page: 1, searchText: "" });
-
     this.initParticles();
   }
 
@@ -343,7 +323,7 @@ class ProjectsDashboard {
       }
     });
 
-    // Нов проект -> директно към /new-project
+    // ✅ Нов проект -> само redirect (НИКАКВИ заявки)
     this.createNewBtn.addEventListener("click", () => {
       window.location.href = "/svganimator/frontend/platform/new-project";
     });
@@ -353,7 +333,6 @@ class ProjectsDashboard {
     const q = query.trim();
     this.searchText = q;
 
-    // small debounce
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = setTimeout(async () => {
       await this.loadProjects({ page: 1, searchText: this.searchText });
@@ -361,7 +340,6 @@ class ProjectsDashboard {
   }
 
   async loadProjects({ page = 1, searchText = "" } = {}) {
-    // optional: show skeleton/loading state
     this.setLoading(true);
 
     const res = await getAllAnimationsRequest({ page, searchText });
@@ -369,10 +347,6 @@ class ProjectsDashboard {
     this.setLoading(false);
 
     if (!res || res.success !== true) {
-      const msg =
-        res?.error?.message ||
-        "Грешка при зареждане на проектите.";
-
       console.error("[my-projects] load error:", res);
 
       this.projects = [];
@@ -382,16 +356,14 @@ class ProjectsDashboard {
       this.renderProjects();
       this.renderPagination();
 
-      // show empty + message in console (UI може да го направим по-късно)
       this.emptyState.style.display = "flex";
       this.pagination.style.display = "none";
       return;
     }
 
     const animations = Array.isArray(res.animations) ? res.animations : [];
-    const mapped = animations.map(mapApiAnimationToProject);
+    this.projects = animations.map(mapApiAnimationToProject);
 
-    this.projects = mapped;
     this.currentPage = Number(page) || 1;
     this.totalPages = Number(res.numOfPages) || 1;
 
@@ -400,10 +372,10 @@ class ProjectsDashboard {
   }
 
   setLoading(isLoading) {
-    // Минимално: disable pagination buttons и input
     if (this.prevPageBtn) this.prevPageBtn.disabled = isLoading || this.currentPage <= 1;
     if (this.nextPageBtn) this.nextPageBtn.disabled = isLoading || this.currentPage >= this.totalPages;
     if (this.searchInput) this.searchInput.disabled = !!isLoading;
+    if (this.createNewBtn) this.createNewBtn.disabled = !!isLoading;
   }
 
   renderProjects() {
@@ -501,8 +473,7 @@ class ProjectsDashboard {
         const action = btn.dataset.action;
 
         if (action === "edit") {
-          // смени този път към твоя реален editor, ако е различен
-          window.location.href = `/dashboard/edit?id=${projectId}`;
+          window.location.href = `/svganimator/frontend/platform/new-project?animation_id=${encodeURIComponent(projectId)}`;
           return;
         }
 
@@ -516,8 +487,7 @@ class ProjectsDashboard {
     this.projectsGrid.querySelectorAll(".project-card").forEach((card) => {
       card.addEventListener("click", () => {
         const projectId = parseInt(card.dataset.id, 10);
-        // смени този път към твоя реален editor, ако е различен
-        window.location.href = `/dashboard/edit?id=${projectId}`;
+        window.location.href = `/svganimator/frontend/platform/new-project?animation_id=${encodeURIComponent(projectId)}`;
       });
     });
   }
@@ -582,27 +552,43 @@ class ProjectsDashboard {
     const project = this.projects.find((p) => p.id === projectId);
     if (!project) return;
 
+    let ok = false;
+
     if (!window.ConfirmationModal || typeof window.ConfirmationModal.open !== "function") {
-      const ok = window.confirm(`Сигурен ли си, че искаш да изтриеш "${project.name}"?`);
-      if (ok) this.deleteProjectLocal(projectId);
+      ok = window.confirm(`Сигурен ли си, че искаш да изтриеш "${project.name}"?`);
+    } else {
+      ok = await window.ConfirmationModal.open({
+        title: "Потвърждение",
+        message: `Сигурен ли си, че искаш да изтриеш "${project.name}"?`,
+        confirmText: "Изтрий",
+        cancelText: "Откажи",
+      });
+    }
+
+    if (!ok) return;
+
+    await this.deleteProject(projectId);
+  }
+
+  async deleteProject(projectId) {
+    this.setLoading(true);
+    const res = await deleteAnimationRequest({ animationId: projectId });
+    this.setLoading(false);
+
+    if (!res || res.success !== true) {
+      console.error("[my-projects] delete error:", res);
+      alert(res?.error?.message || "Грешка при изтриване на анимацията.");
       return;
     }
 
-    const ok = await window.ConfirmationModal.open({
-      title: "Потвърждение",
-      message: `Сигурен ли си, че искаш да изтриеш "${project.name}"?`,
-      confirmText: "Изтрий",
-      cancelText: "Откажи",
-    });
+    const current = this.currentPage;
+    const q = this.searchText;
 
-    if (ok) this.deleteProjectLocal(projectId);
-  }
+    await this.loadProjects({ page: current, searchText: q });
 
-  deleteProjectLocal(projectId) {
-    // Засега само UI remove (ако имаш delete endpoint, ще го вържем после)
-    this.projects = this.projects.filter((p) => p.id !== projectId);
-    this.renderProjects();
-    this.renderPagination();
+    if ((this.projects?.length ?? 0) === 0 && current > 1) {
+      await this.loadProjects({ page: current - 1, searchText: q });
+    }
   }
 
   initParticles() {
