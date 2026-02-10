@@ -28,7 +28,7 @@ class PostController extends Controller
                 }
 
                 if (!Validator::checkUserId($animationUserId)) {
-                    Response::error("FORBIDDEN", "не може да изтриете анимация която не е ваша", 403);
+                    Response::error("FORBIDDEN", "не може да направите пост с анимация която не е ваша", 403);
                     return;
                 }
 
@@ -158,7 +158,35 @@ class PostController extends Controller
 
             $currentPostId = Request::param("current_post_id");
             $userId = Session::user()["id"];
-            $nextPosts = PostRepositories::getMyPosts($conn, $currentPostId, $userId);
+            $nextPosts = PostRepositories::getPostsByUserId($conn, $currentPostId, $userId);
+
+            foreach ($nextPosts as &$post) {
+                $animationId = (int)$post['animation_id'];
+                $animation = AnimationRepositories::getAnimationPreviewById($conn, $animationId);
+
+                $post['animation'] = $animation;
+                $userId = (int)$post['user_id'];
+                $post['username'] = UserRepository::getUsernameById($conn, $userId);
+            }
+            unset($post);
+
+            Response::success([
+                "nextPosts" => $nextPosts
+            ], 200);
+        });
+    }
+
+    public static function getPostsByUserId()
+    {
+        self::withDb(function ($conn) {
+            $currentPostId = Request::param("current_post_id");
+            $userId = Request::param("user_id");
+            if(!$userId){
+                Response::error('MISSING_ID', "не е подаден user_id", 400);
+                return;
+            }
+
+            $nextPosts = PostRepositories::getPostsByUserId($conn, $currentPostId, $userId);
 
             foreach ($nextPosts as &$post) {
                 $animationId = (int)$post['animation_id'];

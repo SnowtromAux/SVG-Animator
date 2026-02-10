@@ -164,7 +164,7 @@ class PostRepositories
         return DataBase::fetchAll($db, $sql, "s", [$createdAt]);
     }
 
-    public static function getMyPosts(mysqli $db, ?int $currentPostId, int $userId)
+    public static function getPostsByUserId(mysqli $db, ?int $currentPostId, int $userId)
     {
         if ($currentPostId === null) {
             $sql = "SELECT 
