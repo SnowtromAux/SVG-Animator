@@ -92,9 +92,10 @@ class AnimationRepositories
                                 easing,
                                 duration,
                                 start_at,
-                                end_at
+                                end_at,
+                                element_id
                                 ) 
-                                VALUES (?,?,?,?,?,?,?);";
+                                VALUES (?,?,?,?,?,?,?,?);";
 
                 foreach ($animationSegments as $segment) {
                     if (number_format((float)$segment["end_at"], 2) < number_format((float)$segment["start_at"], 2)){
@@ -104,7 +105,7 @@ class AnimationRepositories
                         DataBase::exec(
                             $db,
                             $sql_segment,
-                            "iissddd",
+                            "iissdddi",
                             [
                                 $animationId,
                                 (int)$segment["step"],
@@ -112,7 +113,8 @@ class AnimationRepositories
                                 (string)$segment["easing"],
                                 number_format((float)$segment["end_at"] - (float)$segment["start_at"], 2),
                                 (float)$segment["start_at"],
-                                (float)$segment["end_at"]
+                                (float)$segment["end_at"],
+                                (int)$segment["element_id"]
                             ]
                         );
                 }
