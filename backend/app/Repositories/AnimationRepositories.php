@@ -141,7 +141,7 @@ class AnimationRepositories
         $animation["duration"] = (int)$animation["duration"];
 
         $sqlSegments = "
-            SELECT id, animation_id, step, animation_data, easing, duration
+            SELECT id, animation_id, step, animation_data, easing, duration, start_at, end_at ,element_id
             FROM animation_segment
             WHERE animation_id = ?
             ORDER BY step ASC;
@@ -156,6 +156,7 @@ class AnimationRepositories
             $seg["duration"] = (float)$seg["duration"];
             $seg["end_at"] = (float)$seg["end_at"];
             $seg["start_at"] = (float)$seg["start_at"];
+            $seg["element_id"] = (int)$seg["element_id"];
         }
         unset($seg);
 
@@ -296,7 +297,7 @@ class AnimationRepositories
     private static function fetchSegmentsByAnimationId(mysqli $db, int $animationId): array
     {
         $sql = "
-        SELECT id, animation_id, step, animation_data, easing, duration, start_at, end_at
+        SELECT id, animation_id, step, animation_data, easing, duration, start_at, end_at, element_id
         FROM animation_segment
         WHERE animation_id = ?
         ORDER BY step ASC;
@@ -311,6 +312,7 @@ class AnimationRepositories
             $seg["duration"] = (float)$seg["duration"];
             $seg["start_at"] = (float)$seg["start_at"];
             $seg["end_at"] = (float)$seg["end_at"];
+            $seg["element_id"] = (float)$seg["element_id"];
         }
         unset($seg);
 
