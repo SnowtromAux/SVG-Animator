@@ -315,7 +315,7 @@ class ProjectsDashboard {
     });
 
     this.createNewBtn.addEventListener("click", () => {
-      window.location.href = "/svganimator/frontend/platform/new-project";
+      window.location.href = "/svganimator/frontend/platform/editor";
     });
   }
 
@@ -456,7 +456,7 @@ class ProjectsDashboard {
         const action = btn.dataset.action;
 
         if (action === "edit") {
-          window.location.href = `/svganimator/frontend/platform/new-project?animation_id=${encodeURIComponent(projectId)}`;
+          window.location.href = `/svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
           return;
         }
 
@@ -470,7 +470,7 @@ class ProjectsDashboard {
     this.projectsGrid.querySelectorAll(".project-card").forEach((card) => {
       card.addEventListener("click", () => {
         const projectId = parseInt(card.dataset.id, 10);
-        window.location.href = `/svganimator/frontend/platform/new-project?animation_id=${encodeURIComponent(projectId)}`;
+        window.location.href = `/svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
       });
     });
   }
