@@ -151,4 +151,28 @@ class PostController extends Controller
             ], 200);
         });
     }
+
+    public static function getMyPosts()
+    {
+        self::withDb(function ($conn) {
+
+            $currentPostId = Request::param("current_post_id");
+            $userId = Session::user()["id"];
+            $nextPosts = PostRepositories::getMyPosts($conn, $currentPostId, $userId);
+
+            foreach ($nextPosts as &$post) {
+                $animationId = (int)$post['animation_id'];
+                $animation = AnimationRepositories::getAnimationPreviewById($conn, $animationId);
+
+                $post['animation'] = $animation;
+                $userId = (int)$post['user_id'];
+                $post['username'] = UserRepository::getUsernameById($conn, $userId);
+            }
+            unset($post);
+
+            Response::success([
+                "nextPosts" => $nextPosts
+            ], 200);
+        });
+    }
 }
