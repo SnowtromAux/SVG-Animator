@@ -1,121 +1,97 @@
-const STORAGE_KEY = 'svganimator.animations.v1';
+import { API_BASE_URL } from "../constants/env.js";
 
-function loadStore() {
+// GET /animation/get-all-animations?page=1&search_text=...
+export async function getAllAnimationsRequest({ page = 1, searchText = "" } = {}) {
+  const url = `${API_BASE_URL}/animation/get-all-animations?page=${encodeURIComponent(page)}&search_text=${encodeURIComponent(searchText)}`;
+
+  console.log("[animations] GET", url);
+
+  let response;
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-  } catch {
-    return {};
+    response = await fetch(url, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      // credentials: "include",
+    });
+  } catch (err) {
+    console.error("[animations] NETWORK ERROR", err);
+    return {
+      success: false,
+      error: { code: "NETWORK_ERROR", message: "Няма връзка със сървъра. Опитайте отново." },
+    };
   }
+
+  const text = await response.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (e) {
+    console.error("[animations] Non-JSON response body:", text);
+    data = null;
+  }
+
+  console.log("[animations] status:", response.status, "data:", data);
+
+  if (data && typeof data === "object" && "success" in data) return data;
+
+  if (!response.ok) {
+    return {
+      success: false,
+      error: { code: "HTTP_ERROR", message: `Request failed with status ${response.status}` },
+    };
+  }
+
+  return { success: true, data };
 }
 
-function saveStore(store) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-}
 
-function safeId(id) {
-  return String(id || '').trim() || `anim-${Date.now()}`;
-}
+// DELETE /animation/delete-animation
+export async function deleteAnimationRequest({ animationId } = {}) {
+  const url = `${API_BASE_URL}/animation/delete-animation`;
+  const payload = { animation_id: animationId };
 
-export class AnimationsService {
-  constructor({ baseUrl = '/api' } = {}) {
-    this.baseUrl = baseUrl;
+  console.log("[animations] DELETE", url, payload);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(payload),
+      // credentials: "include",
+    });
+  } catch (err) {
+    console.error("[animations] DELETE NETWORK ERROR", err);
+    return {
+      success: false,
+      error: { code: "NETWORK_ERROR", message: "Няма връзка със сървъра. Опитайте отново." },
+    };
   }
 
-  /**
-   * Save an animation.
-   * Expected input:
-   * {
-   *   animation_id,
-   *   name,
-   *   settings,
-   *   segments,
-   *   svgContent
-   * }
-   *
-   * Returns: { animation_id }
-   */
-  async saveAnimation(animationData) {
-    const animation_id = safeId(animationData?.animation_id);
+  const text = await response.text();
+  let data = null;
 
-    // Try API first
-    try {
-      const res = await fetch(`${this.baseUrl}/animations/${encodeURIComponent(animation_id)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...animationData, animation_id })
-      });
-
-      if (res.ok) {
-        const json = await res.json().catch(() => ({}));
-        return { animation_id: json.animation_id || animation_id };
-      }
-
-      // If API responds but not ok, throw to fallback
-      throw new Error(`API save failed: ${res.status}`);
-    } catch (err) {
-      // Fallback to localStorage
-      const store = loadStore();
-      store[animation_id] = {
-        ...animationData,
-        animation_id,
-        updatedAt: new Date().toISOString()
-      };
-      saveStore(store);
-      return { animation_id };
-    }
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch (e) {
+    console.error("[animations] DELETE Non-JSON response body:", text);
+    data = null;
   }
 
-  /**
-   * Load an animation by id.
-   * Returns the animation object or null.
-   */
-  async getAnimation(animation_id) {
-    const id = safeId(animation_id);
+  console.log("[animations] DELETE status:", response.status, "data:", data);
 
-    // Try API first
-    try {
-      const res = await fetch(`${this.baseUrl}/animations/${encodeURIComponent(id)}`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
+  if (data && typeof data === "object" && "success" in data) return data;
 
-      if (res.ok) {
-        const json = await res.json();
-        return json || null;
-      }
-
-      throw new Error(`API get failed: ${res.status}`);
-    } catch {
-      const store = loadStore();
-      return store[id] || null;
-    }
+  if (!response.ok) {
+    return {
+      success: false,
+      error: { code: "HTTP_ERROR", message: `Request failed with status ${response.status}` },
+    };
   }
 
-  /**
-   * List animations.
-   * Returns array of { animation_id, name, updatedAt }
-   */
-  async listAnimations() {
-    // Try API first
-    try {
-      const res = await fetch(`${this.baseUrl}/animations`, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        return Array.isArray(json) ? json : [];
-      }
-
-      throw new Error(`API list failed: ${res.status}`);
-    } catch {
-      const store = loadStore();
-      return Object.values(store).map((a) => ({
-        animation_id: a.animation_id,
-        name: a.name || a.animation_id,
-        updatedAt: a.updatedAt
-      }));
-    }
-  }
+  return { success: true, data };
 }
