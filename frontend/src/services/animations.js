@@ -17,10 +17,7 @@ export async function getAllAnimationsRequest({ page = 1, searchText = "" } = {}
     console.error("[animations] NETWORK ERROR", err);
     return {
       success: false,
-      error: {
-        code: "NETWORK_ERROR",
-        message: "Няма връзка със сървъра. Опитайте отново.",
-      },
+      error: { code: "NETWORK_ERROR", message: "Няма връзка със сървъра. Опитайте отново." },
     };
   }
 
@@ -36,48 +33,42 @@ export async function getAllAnimationsRequest({ page = 1, searchText = "" } = {}
 
   console.log("[animations] status:", response.status, "data:", data);
 
-  if (data && typeof data === "object" && "success" in data) {
-    return data;
-  }
+  if (data && typeof data === "object" && "success" in data) return data;
 
   if (!response.ok) {
     return {
       success: false,
-      error: {
-        code: "HTTP_ERROR",
-        message: `Request failed with status ${response.status}`,
-      },
+      error: { code: "HTTP_ERROR", message: `Request failed with status ${response.status}` },
     };
   }
 
   return { success: true, data };
 }
 
-// POST /animation/delete-animation body: { animation_id: 10 }
+
+// DELETE /animation/delete-animation
 export async function deleteAnimationRequest({ animationId } = {}) {
   const url = `${API_BASE_URL}/animation/delete-animation`;
+  const payload = { animation_id: animationId };
 
-  console.log("[animations] POST", url, { animation_id: animationId });
+  console.log("[animations] DELETE", url, payload);
 
   let response;
   try {
     response = await fetch(url, {
-      method: "POST",
+      method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({ animation_id: animationId }),
+      body: JSON.stringify(payload),
       // credentials: "include",
     });
   } catch (err) {
     console.error("[animations] DELETE NETWORK ERROR", err);
     return {
       success: false,
-      error: {
-        code: "NETWORK_ERROR",
-        message: "Няма връзка със сървъра. Опитайте отново.",
-      },
+      error: { code: "NETWORK_ERROR", message: "Няма връзка със сървъра. Опитайте отново." },
     };
   }
 
@@ -93,17 +84,12 @@ export async function deleteAnimationRequest({ animationId } = {}) {
 
   console.log("[animations] DELETE status:", response.status, "data:", data);
 
-  if (data && typeof data === "object" && "success" in data) {
-    return data;
-  }
+  if (data && typeof data === "object" && "success" in data) return data;
 
   if (!response.ok) {
     return {
       success: false,
-      error: {
-        code: "HTTP_ERROR",
-        message: `Request failed with status ${response.status}`,
-      },
+      error: { code: "HTTP_ERROR", message: `Request failed with status ${response.status}` },
     };
   }
 

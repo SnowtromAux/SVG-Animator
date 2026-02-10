@@ -127,7 +127,7 @@ function initConfirmationModal() {
 }
 
 /* =========================
-   Helpers (SVG + formatting)
+   Helpers
 ========================= */
 function formatSeconds(sec) {
   const n = Number(sec);
@@ -145,11 +145,7 @@ function formatDateBg(createdAt) {
 
 function safeJsonParse(str) {
   if (!str || typeof str !== "string") return null;
-  try {
-    return JSON.parse(str);
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(str); } catch { return null; }
 }
 
 function sanitizeSvg(svgText) {
@@ -167,7 +163,6 @@ function sanitizeSvg(svgText) {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = String(attr.value || "").trim().toLowerCase();
-
       if (name.startsWith("on")) el.removeAttribute(attr.name);
       if ((name === "href" || name === "xlink:href") && value.startsWith("javascript:")) {
         el.removeAttribute(attr.name);
@@ -233,9 +228,6 @@ function pickFromSettings(settings, keys) {
   return null;
 }
 
-/* =========================
-   Mapping backend -> UI model
-========================= */
 function mapApiAnimationToProject(item) {
   const anim = item?.animation || {};
   const segments = Array.isArray(item?.animation_segments) ? item.animation_segments : [];
@@ -269,7 +261,6 @@ function mapApiAnimationToProject(item) {
     dims,
     sizeKb,
     segmentsCount: segments.length,
-    raw: item,
   };
 }
 
@@ -323,7 +314,6 @@ class ProjectsDashboard {
       }
     });
 
-    // ✅ Нов проект -> само redirect (НИКАКВИ заявки)
     this.createNewBtn.addEventListener("click", () => {
       window.location.href = "/svganimator/frontend/platform/new-project";
     });
@@ -379,9 +369,7 @@ class ProjectsDashboard {
   }
 
   renderProjects() {
-    const projectsToShow = this.projects;
-
-    if (!projectsToShow || projectsToShow.length === 0) {
+    if (!this.projects || this.projects.length === 0) {
       this.projectsGrid.innerHTML = "";
       this.emptyState.style.display = "flex";
       this.pagination.style.display = "none";
@@ -391,7 +379,7 @@ class ProjectsDashboard {
     this.emptyState.style.display = "none";
     this.pagination.style.display = "flex";
 
-    this.projectsGrid.innerHTML = projectsToShow
+    this.projectsGrid.innerHTML = this.projects
       .map((project, index) => {
         const durationLabel = formatSeconds(project.durationSec);
         const fpsLabel = `${project.fps} FPS`;
@@ -410,7 +398,6 @@ class ProjectsDashboard {
           <div class="project-card" data-id="${project.id}" style="animation-delay: ${index * 0.1}s">
             <div class="card-image">
               ${imageHtml}
-
               <div class="card-stats-overlay">
                 <div class="stat-badge">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -444,12 +431,8 @@ class ProjectsDashboard {
               <p class="card-date">Създаден: ${formatDateBg(project.createdAt)}</p>
 
               <div class="card-actions">
-                <button class="btn-card btn-card-delete" data-action="delete" data-id="${project.id}">
-                  Изтрий
-                </button>
-                <button class="btn-card btn-card-edit" data-action="edit" data-id="${project.id}">
-                  Редактирай
-                </button>
+                <button class="btn-card btn-card-delete" data-action="delete" data-id="${project.id}">Изтрий</button>
+                <button class="btn-card btn-card-edit" data-action="edit" data-id="${project.id}">Редактирай</button>
               </div>
             </div>
           </div>
@@ -499,21 +482,16 @@ class ProjectsDashboard {
     this.prevPageBtn.disabled = current === 1;
     this.nextPageBtn.disabled = current === totalPages;
 
-    let paginationHTML = "";
-
+    let html = "";
     for (let i = 1; i <= totalPages; i++) {
       if (i === 1 || i === totalPages || (i >= current - 1 && i <= current + 1)) {
-        paginationHTML += `
-          <button class="page-number ${i === current ? "active" : ""}" data-page="${i}">
-            ${i}
-          </button>
-        `;
+        html += `<button class="page-number ${i === current ? "active" : ""}" data-page="${i}">${i}</button>`;
       } else if (i === current - 2 || i === current + 2) {
-        paginationHTML += `<span class="page-number" style="pointer-events: none;">...</span>`;
+        html += `<span class="page-number" style="pointer-events:none;">...</span>`;
       }
     }
 
-    this.paginationNumbers.innerHTML = paginationHTML;
+    this.paginationNumbers.innerHTML = html;
 
     this.paginationNumbers.querySelectorAll(".page-number[data-page]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -527,15 +505,10 @@ class ProjectsDashboard {
     const project = this.projects.find((p) => p.id === projectId);
     if (!project) return;
 
-    if (!window.InfoModal || typeof window.InfoModal.open !== "function") {
-      alert("InfoModal не е наличен.");
-      return;
-    }
-
     const dimsText = project.dims ? `${Math.round(project.dims.w)}x${Math.round(project.dims.h)}` : "—";
     const sizeText = project.sizeKb ? `${project.sizeKb} KB` : "—";
 
-    window.InfoModal.open({
+    window.InfoModal?.open?.({
       title: project.name,
       items: [
         { name: "Формат", value: "SVG" },
@@ -543,7 +516,6 @@ class ProjectsDashboard {
         { name: "Файлов размер", value: sizeText },
         { name: "FPS", value: String(project.fps) },
         { name: "Секунди", value: formatSeconds(project.durationSec) },
-        { name: "Сегменти", value: String(project.segmentsCount ?? 0) },
       ],
     });
   }
@@ -554,7 +526,7 @@ class ProjectsDashboard {
 
     let ok = false;
 
-    if (!window.ConfirmationModal || typeof window.ConfirmationModal.open !== "function") {
+    if (!window.ConfirmationModal?.open) {
       ok = window.confirm(`Сигурен ли си, че искаш да изтриеш "${project.name}"?`);
     } else {
       ok = await window.ConfirmationModal.open({
@@ -566,7 +538,6 @@ class ProjectsDashboard {
     }
 
     if (!ok) return;
-
     await this.deleteProject(projectId);
   }
 
@@ -608,7 +579,6 @@ class ProjectsDashboard {
     const createParticles = () => {
       particles = [];
       const numberOfParticles = Math.min(80, Math.floor((canvas.width * canvas.height) / 15000));
-
       for (let i = 0; i < numberOfParticles; i++) {
         particles.push({
           x: Math.random() * canvas.width,
@@ -624,37 +594,33 @@ class ProjectsDashboard {
     const drawParticles = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      particles.forEach((particle, i) => {
-        particle.x += particle.vx;
-        particle.y += particle.vy;
+      particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
 
-        if (particle.x < 0 || particle.x > canvas.width) particle.vx *= -1;
-        if (particle.y < 0 || particle.y > canvas.height) particle.vy *= -1;
-
-        const dx = mouseX - particle.x;
-        const dy = mouseY - particle.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < 150) {
-          particle.x -= dx * 0.01;
-          particle.y -= dy * 0.01;
+        const dx = mouseX - p.x;
+        const dy = mouseY - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          p.x -= dx * 0.01;
+          p.y -= dy * 0.01;
         }
 
         ctx.beginPath();
-        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(99, 102, 241, ${particle.opacity})`;
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(99, 102, 241, ${p.opacity})`;
         ctx.fill();
 
-        particles.slice(i + 1).forEach((otherParticle) => {
-          const dx2 = particle.x - otherParticle.x;
-          const dy2 = particle.y - otherParticle.y;
-          const distance2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-
-          if (distance2 < 120) {
+        particles.slice(i + 1).forEach((o) => {
+          const dx2 = p.x - o.x;
+          const dy2 = p.y - o.y;
+          const d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+          if (d2 < 120) {
             ctx.beginPath();
-            ctx.moveTo(particle.x, particle.y);
-            ctx.lineTo(otherParticle.x, otherParticle.y);
-            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - distance2 / 120)})`;
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(o.x, o.y);
+            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - d2 / 120)})`;
             ctx.stroke();
           }
         });
