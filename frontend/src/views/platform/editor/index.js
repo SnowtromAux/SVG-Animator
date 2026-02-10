@@ -1,8 +1,7 @@
-
 import { ANIMATION_PROPERTIES } from '../../../constants/animation-properties.js';
 import { DEFAULT_FPS, PX_PER_SECOND, MAX_SECONDS } from '../../../constants/default-settings.js';
 import { isAnimatableNode } from '../../../utils/svg-animatable.js';
-import { AnimationsService } from '../../../services/animations.js';
+import { getAnimationRequest, saveAnimationRequest } from '../../../services/animations.js';
 
 // ===== App =====
 class SvgAnimatorEditor {
@@ -50,7 +49,6 @@ class SvgAnimatorEditor {
     };
 
     this.DOM = {};
-    this.animationsService = new AnimationsService({ baseUrl: '/api' });
 
     // bind methods used as listeners
     this.handleFileUpload = this.handleFileUpload.bind(this);
@@ -98,6 +96,207 @@ class SvgAnimatorEditor {
     // expose for inline onclick handlers
     window.editStep = (index) => this.editStep(index);
     window.deleteStep = (index) => this.deleteStep(index);
+
+    // ✅ NEW: load from URL params (only if animation_id exists)
+    this.loadFromUrlParams();
+  }
+
+  // ✅ NEW: if ?animation_id=XXX exists → fetch and load
+  async loadFromUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    const animationId = params.get('animation_id');
+
+    if (!animationId) return; // няма param → не зареждаме нищо
+
+    this.showToast('success', 'Зареждане на анимация...');
+    const res = await getAnimationRequest({ animationId });
+
+    if (!res?.success) {
+      this.showToast('error', res?.error?.message || 'Грешка при зареждане на анимацията.');
+      return;
+    }
+
+    // очакваме { success: true, animation: {...} }
+    const anim = res.animation || res.data?.animation;
+    if (!anim) {
+      this.showToast('error', 'Невалиден отговор от сървъра (липсва animation).');
+      return;
+    }
+
+    try {
+      await this.applyLoadedAnimation(anim);
+      this.showToast('success', 'Анимацията е заредена успешно');
+    } catch (e) {
+      console.error(e);
+      this.showToast('error', 'Грешка при прилагане на анимацията.');
+    }
+  }
+
+  // ✅ NEW: apply loaded backend data into editor state/UI
+  async applyLoadedAnimation(anim) {
+    // Set editor animation id
+    this.state.animationId = anim.id ?? null;
+
+    // Name
+    if (this.DOM.projectName) {
+      this.DOM.projectName.value = anim.name || 'Untitled';
+    }
+
+    // 1) Load SVG first (this builds elements tree + enables controls)
+    const svgText = anim.starting_svg || anim.svg || anim.startingSvg || '';
+    if (!svgText || !String(svgText).includes('<svg')) {
+      throw new Error('Invalid starting_svg');
+    }
+    this.loadSVG(svgText);
+
+    // 2) Settings (stored as JSON.stringify)
+    const parsedSettings = this.safeParseJson(anim.animation_settings);
+    if (parsedSettings && typeof parsedSettings === 'object') {
+      // tolerant mapping (ако бекенд ползва други имена)
+      const mapped = { ...parsedSettings };
+
+      // common alias: canvas_background -> canvasBgColor
+      if (mapped.canvas_background && !mapped.canvasBgColor) {
+        mapped.canvasBgColor = mapped.canvas_background;
+      }
+
+      // fps might be string
+      if (mapped.fps !== undefined) {
+        const f = parseInt(mapped.fps, 10);
+        if (!Number.isNaN(f)) mapped.fps = f;
+      }
+
+      // merge into existing settings, keep originalViewBox if already detected
+      this.state.settings = {
+        ...this.state.settings,
+        ...mapped,
+        originalViewBox: this.state.settings.originalViewBox
+      };
+
+      // if useOriginalViewBox is true and we have originalViewBox, sync viewBox
+      if (this.state.settings.useOriginalViewBox && this.state.settings.originalViewBox) {
+        this.state.settings.viewBox = { ...this.state.settings.originalViewBox };
+      }
+
+      this.applyViewBox();
+      this.applyCanvasBackground();
+      this.updateFpsDisplay();
+    }
+
+    // 3) Steps / segments
+    const segments = Array.isArray(anim.animation_segments) ? anim.animation_segments : [];
+    const sorted = [...segments].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
+
+    const steps = [];
+    let maxId = 0;
+
+    for (const seg of sorted) {
+      const elementUid = Number(seg.element_id);
+      const elementData = this.state.elements.find((el) => el.uid === elementUid);
+      if (!elementData) continue;
+
+      const animData = this.safeParseJson(seg.animation_data) || {};
+      const { property, toValue } = this.extractPropertyAndToValue(animData);
+
+      if (!property) continue;
+
+      const tagName = elementData.tagName;
+      const meta = this.getPropMeta(tagName, property);
+      const propType = meta?.type || '';
+
+      // Always resolve FROM from current SVG
+      const resolvedFrom = this.getResolvedAttributeForInput(elementData.element, property, propType);
+
+      const startAt = Number(seg.start_at) || 0;
+      const endAt = Number(seg.end_at);
+      const segDuration = Number(seg.duration);
+
+      let duration = 1;
+      if (!Number.isNaN(endAt) && endAt > startAt) duration = endAt - startAt;
+      else if (!Number.isNaN(segDuration) && segDuration > 0) duration = segDuration;
+
+      const stepId = Number(seg.step) || Number(seg.id) || (steps.length + 1);
+      maxId = Math.max(maxId, stepId);
+
+      steps.push({
+        id: stepId,
+        elementPath: elementData.path,
+        elementUid: elementData.uid,
+        elementTag: elementData.tagName,
+        elementId: elementData.id,
+        property,
+        propertyLabel: meta?.label || property,
+        fromValue: resolvedFrom,
+        toValue: String(toValue ?? ''),
+        startTime: this.clamp(startAt, 0, MAX_SECONDS),
+        duration: this.clamp(duration, 0.05, MAX_SECONDS),
+        easing: seg.easing || 'ease-in-out'
+      });
+    }
+
+    this.state.steps = steps;
+    this.state.stepCounter = maxId;
+    this.state.currentStepIndex = steps.length ? 0 : -1;
+    this.state.editingStepIndex = null;
+
+    // render everything
+    this.renderSteps();
+    this.updateTimeline();
+    this.updateStepNavigation();
+    this.seekToFrame(0);
+
+    // loaded data = not "unsaved" by default
+    this.state.hasUnsavedChanges = false;
+  }
+
+  safeParseJson(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  extractPropertyAndToValue(animData) {
+    // Supports formats like:
+    // 1) {"opacity": 0}
+    // 2) {"property":"opacity","to":0}
+    // 3) {"property":"opacity","value":0}
+    if (!animData || typeof animData !== 'object') return { property: '', toValue: '' };
+
+    let property = '';
+    let toValue = '';
+
+    if (typeof animData.property === 'string') property = animData.property;
+
+    if (animData.to !== undefined) toValue = animData.to;
+    else if (animData.value !== undefined) toValue = animData.value;
+
+    if (!property) {
+      const keys = Object.keys(animData);
+      if (keys.length) {
+        property = keys[0];
+        toValue = animData[property];
+      }
+    }
+
+    // if toValue is object/array, stringify it (UI expects string)
+    if (typeof toValue === 'object') {
+      try {
+        toValue = JSON.stringify(toValue);
+      } catch {
+        toValue = String(toValue);
+      }
+    }
+
+    return { property, toValue };
+  }
+
+  getPropMeta(tagName, propName) {
+    const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
+    return props.properties.find((p) => p.name === propName) || null;
   }
 
   // ===== DOM Cache =====
@@ -449,8 +648,6 @@ class SvgAnimatorEditor {
       btn.style.pointerEvents = isLocked ? 'none' : '';
       btn.style.opacity = isLocked ? '0.5' : '';
     });
-
-    // Disable dragging blocks by pointer handler guard (see onTimelinePointerDown)
   }
 
   // ===== File Upload =====
@@ -573,10 +770,8 @@ class SvgAnimatorEditor {
 
   // ===== Reset all editor state on new SVG =====
   resetForNewSvg() {
-    // stop playback if running
     if (this.state.isPlaying) this.stopPlayback();
 
-    // reset steps/timeline
     this.state.steps = [];
     this.state.currentStepIndex = -1;
     this.state.editingStepIndex = null;
@@ -585,7 +780,6 @@ class SvgAnimatorEditor {
     this.state.currentFrame = 0;
     this.state.totalFrames = 0;
 
-    // reset selections/UI
     this.state.selectedElement = null;
 
     this.DOM.targetElement.innerHTML = '<option value="">Изберете елемент</option>';
@@ -605,19 +799,16 @@ class SvgAnimatorEditor {
     this.DOM.animationDuration.value = 1;
     this.DOM.animationEasing.value = 'ease-in-out';
 
-    // reset visuals
     this.renderSteps();
     this.updateTimeline();
     this.updateStepNavigation();
     this.updatePlayhead();
 
-    // unlock editor (will be re-enabled after load)
     this.setEditorLocked(false);
   }
 
   // ===== Load SVG =====
   loadSVG(svgString) {
-    // reset state when switching SVG
     this.resetForNewSvg();
 
     const parser = new DOMParser();
@@ -629,10 +820,8 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // Store SVG content (original document element)
     this.state.svgContent = svgElement;
 
-    // Store original viewBox
     const originalViewBox = svgElement.getAttribute('viewBox');
     if (originalViewBox) {
       const parts = originalViewBox.split(/\s+|,/).map(Number);
@@ -649,31 +838,23 @@ class SvgAnimatorEditor {
       }
     }
 
-    // Display SVG in canvas
     this.DOM.mainCanvas.innerHTML = svgElement.innerHTML;
 
-    // Copy attributes
     Array.from(svgElement.attributes).forEach((attr) => {
       if (attr.name !== 'xmlns') {
         this.DOM.mainCanvas.setAttribute(attr.name, attr.value);
       }
     });
 
-    // Apply viewBox + background
     this.applyViewBox();
     this.applyCanvasBackground();
 
-    // Show canvas, hide placeholder
     this.DOM.canvasPlaceholder.style.display = 'none';
     this.DOM.mainCanvas.style.display = 'block';
 
-    // Build elements tree (animatable only)
     this.buildElementsTree();
-
-    // Enable controls
     this.enableAddPanel();
 
-    // Update UI
     this.updateFpsDisplay();
     this.updateTimeline();
 
@@ -690,7 +871,6 @@ class SvgAnimatorEditor {
     const treeHTML = this.buildTreeHTML(svgElement, 0);
     this.DOM.elementsTree.innerHTML = treeHTML;
 
-    // Click handlers
     this.DOM.elementsTree.querySelectorAll('.tree-item').forEach((item) => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -701,7 +881,6 @@ class SvgAnimatorEditor {
       item.addEventListener('mouseleave', () => this.highlightElement(item.dataset.path, false));
     });
 
-    // Toggle handlers
     this.DOM.elementsTree.querySelectorAll('.tree-toggle').forEach((toggle) => {
       toggle.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -709,7 +888,6 @@ class SvgAnimatorEditor {
       });
     });
 
-    // Populate select
     this.updateElementSelect();
   }
 
@@ -910,7 +1088,6 @@ class SvgAnimatorEditor {
       return this.rgbToHex(parseFloat(rgbMatch[1]), parseFloat(rgbMatch[2]), parseFloat(rgbMatch[3]));
     }
 
-    // named colors / other: try browser to resolve
     const test = document.createElement('span');
     test.style.color = '';
     test.style.color = v;
@@ -932,7 +1109,6 @@ class SvgAnimatorEditor {
     const defsEl = this.DOM.mainCanvas.querySelector(`#${CSS.escape(id)}`);
     if (!defsEl) return '';
 
-    // linearGradient / radialGradient
     const tag = defsEl.tagName ? defsEl.tagName.toLowerCase() : '';
     if (tag.includes('gradient')) {
       const stop = defsEl.querySelector('stop');
@@ -947,13 +1123,11 @@ class SvgAnimatorEditor {
   getResolvedAttributeForInput(element, attrName, propType) {
     let currentValue = element.getAttribute(attrName) || '';
 
-    // If fill/stroke is url(#...), try convert to first stop color
     if (typeof currentValue === 'string' && currentValue.trim().startsWith('url(')) {
       const resolved = this.resolvePaintUrlToHex(currentValue.trim());
       if (resolved) currentValue = resolved;
     }
 
-    // If it is a color in rgb(), convert to hex for UI
     if (propType === 'color') {
       const hex = this.parseCssColorToHex(currentValue);
       if (hex) currentValue = hex;
@@ -963,7 +1137,6 @@ class SvgAnimatorEditor {
     return currentValue;
   }
 
-  // --- Build inputs: "От" is locked (always taken from SVG attribute), user edits only "До"
   handleAnimationTypeSelect() {
     const propName = this.DOM.animationType.value;
 
@@ -986,7 +1159,6 @@ class SvgAnimatorEditor {
 
     this.DOM.valueInputs.innerHTML = '';
 
-    // We always render FROM + TO, but FROM is disabled (locked)
     if (prop.type === 'select') {
       const fromRow = document.createElement('div');
       fromRow.className = 'value-input-row';
@@ -1040,7 +1212,6 @@ class SvgAnimatorEditor {
         });
       }, 0);
     } else {
-      // numeric/text
       const inputType = prop.type === 'range' ? 'number' : prop.type;
 
       const fromRow = document.createElement('div');
@@ -1079,7 +1250,6 @@ class SvgAnimatorEditor {
     this.DOM.addAnimationBtn.disabled = this.state.isPlaying;
   }
 
-  // Add or update step (editing mode supported)
   addOrUpdateAnimationStep() {
     if (this.state.isPlaying) {
       this.showToast('error', 'Спрете таймлайна, за да добавяте или редактирате стъпки.');
@@ -1099,10 +1269,8 @@ class SvgAnimatorEditor {
     const prop = props.properties.find((p) => p.name === propName);
     const propType = prop?.type || '';
 
-    // Always re-take FROM from SVG attribute at the moment of saving
     const resolvedFrom = this.getResolvedAttributeForInput(this.state.selectedElement.element, propName, propType);
 
-    // If To empty -> error
     if (!String(toInput.value || '').trim()) {
       this.showToast('error', 'Моля, въведете стойност за "До".');
       return;
@@ -1123,17 +1291,15 @@ class SvgAnimatorEditor {
       easing: this.DOM.animationEasing.value
     };
 
-    // clamp times
     stepObj.startTime = this.clamp(stepObj.startTime, 0, MAX_SECONDS);
     stepObj.duration = this.clamp(stepObj.duration, 0.05, MAX_SECONDS);
 
     if (this.state.editingStepIndex !== null && this.state.editingStepIndex >= 0) {
-      // Update existing
       const idx = this.state.editingStepIndex;
       const existing = this.state.steps[idx];
       if (!existing) return;
 
-      stepObj.id = existing.id; // keep id stable
+      stepObj.id = existing.id;
       this.state.steps[idx] = stepObj;
       this.state.currentStepIndex = idx;
       this.state.editingStepIndex = null;
@@ -1141,7 +1307,6 @@ class SvgAnimatorEditor {
       this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
       this.showToast('success', 'Стъпката е обновена');
     } else {
-      // New step
       this.state.stepCounter = (this.state.stepCounter || 0) + 1;
       stepObj.id = this.state.stepCounter;
 
@@ -1156,7 +1321,6 @@ class SvgAnimatorEditor {
     this.updateTimeline();
     this.updateStepNavigation();
 
-    // reset (keep selected element)
     this.DOM.animationType.value = '';
     this.DOM.animationValues.style.display = 'none';
     this.DOM.valueInputs.innerHTML = '';
@@ -1233,7 +1397,6 @@ class SvgAnimatorEditor {
       });
     });
 
-    // re-apply lock state after re-render
     if (this.state.isPlaying) this.setEditorLocked(true);
   }
 
@@ -1269,25 +1432,20 @@ class SvgAnimatorEditor {
     const step = this.state.steps[index];
     if (!step) return;
 
-    // select element
     this.DOM.targetElement.value = step.elementPath;
     this.handleElementSelect();
 
-    // set editing mode
     this.state.editingStepIndex = index;
     this.state.currentStepIndex = index;
 
-    // fill timing/easing
     this.DOM.animationStartTime.value = step.startTime;
     this.DOM.animationDuration.value = step.duration;
     this.DOM.animationEasing.value = step.easing;
 
-    // select animation prop & rebuild inputs
     setTimeout(() => {
       this.DOM.animationType.value = step.property;
       this.handleAnimationTypeSelect();
 
-      // Now set only TO (FROM is locked and auto-resolved by handleAnimationTypeSelect)
       setTimeout(() => {
         const toInput = document.getElementById('valueTo');
         if (toInput) toInput.value = step.toValue;
@@ -1367,12 +1525,10 @@ class SvgAnimatorEditor {
     this.DOM.timelineLabels.innerHTML = labelsHTML;
     this.DOM.timelineTracks.innerHTML = tracksHTML;
 
-    // Attach drag handlers to blocks
     this.DOM.timelineTracks.querySelectorAll('.frame-block').forEach((block) => {
       block.addEventListener('pointerdown', this.onTimelinePointerDown);
     });
 
-    // Ensure playhead position is consistent after updates
     this.updatePlayhead();
   }
 
@@ -1386,7 +1542,6 @@ class SvgAnimatorEditor {
     const stepIndex = parseInt(block.dataset.step, 10);
     if (Number.isNaN(stepIndex)) return;
 
-    // Start drag
     this.state.drag.active = true;
     this.state.drag.stepIndex = stepIndex;
     this.state.drag.startPointerX = e.clientX;
@@ -1398,7 +1553,6 @@ class SvgAnimatorEditor {
 
     block.classList.add('dragging');
 
-    // capture pointer
     block.setPointerCapture?.(e.pointerId);
 
     document.addEventListener('pointermove', this.onTimelinePointerMove);
@@ -1414,27 +1568,22 @@ class SvgAnimatorEditor {
     const dx = e.clientX - this.state.drag.startPointerX;
     let newLeft = this.state.drag.startLeftPx + dx;
 
-    // clamp to 0..MAX_SECONDS
     const minLeft = 0;
     const maxLeft = MAX_SECONDS * PX_PER_SECOND;
     newLeft = this.clamp(newLeft, minLeft, maxLeft);
 
-    // convert to time
     const newStartTime = this.clamp(newLeft / PX_PER_SECOND, 0, MAX_SECONDS);
-    step.startTime = Math.round(newStartTime * 10) / 10; // 0.1s snap
+    step.startTime = Math.round(newStartTime * 10) / 10;
 
-    // update UI quickly without full rebuild
     const block = this.DOM.timelineTracks.querySelector(`.frame-block[data-step="${idx}"]`);
     if (block) {
       block.style.left = `${step.startTime * PX_PER_SECOND}px`;
     }
 
-    // Update playhead time label (optional) is left alone.
-    // Update steps table time live
     this.renderSteps();
   }
 
-  onTimelinePointerUp(e) {
+  onTimelinePointerUp() {
     if (!this.state.drag.active) return;
 
     const idx = this.state.drag.stepIndex;
@@ -1447,7 +1596,6 @@ class SvgAnimatorEditor {
     document.removeEventListener('pointermove', this.onTimelinePointerMove);
     document.removeEventListener('pointerup', this.onTimelinePointerUp);
 
-    // after drag end, rebuild timeline to ensure selection visuals and totals
     this.markAsChanged();
     this.updateTimeline();
     this.renderSteps();
@@ -1569,7 +1717,6 @@ class SvgAnimatorEditor {
         const progress = (currentTime - stepStart) / step.duration;
         const eased = this.applyEasing(progress, step.easing);
 
-        // ensure FROM stays correct if SVG attr changed externally
         const tagName = elementData.tagName;
         const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
         const meta = props.properties.find((p) => p.name === step.property);
@@ -1586,7 +1733,6 @@ class SvgAnimatorEditor {
   }
 
   interpolateValue(element, property, from, to, progress) {
-    // numeric (including units)
     const numWithUnit = this.interpolateNumberWithUnit(from, to, progress);
     if (numWithUnit !== null) {
       element.setAttribute(property, numWithUnit);
@@ -1604,7 +1750,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // colors: allow #, rgb(), url(#...)
     const fromHex = this.parseCssColorToHex(from) || this.resolvePaintUrlToHex(from) || '';
     const toHex = this.parseCssColorToHex(to) || this.resolvePaintUrlToHex(to) || '';
 
@@ -1613,7 +1758,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // fallback discrete
     element.setAttribute(property, progress < 0.5 ? from : to);
   }
 
@@ -1644,11 +1788,11 @@ class SvgAnimatorEditor {
         return t * t;
       case 'ease-out':
         return 1 - (1 - t) * (1 - t);
-      case 'cubic-bezier(0.68, -0.55, 0.265, 1.55)': // Elastic
+      case 'cubic-bezier(0.68, -0.55, 0.265, 1.55)':
         return t < 0.5
           ? (Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2
           : (2 - Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2;
-      case 'cubic-bezier(0.175, 0.885, 0.98, 0.335)': // Back
+      case 'cubic-bezier(0.175, 0.885, 0.98, 0.335)':
         {
           const c1 = 1.70158;
           const c3 = c1 + 1;
@@ -1656,7 +1800,7 @@ class SvgAnimatorEditor {
             ? (Math.pow(2 * t, 2) * ((c3 + 1) * 2 * t - c3)) / 2
             : (Math.pow(2 * t - 2, 2) * ((c3 + 1) * (t * 2 - 2) + c3) + 2) / 2;
         }
-      case 'cubic-bezier(0.6, 0.04, 0.98, 0.335)': // Expo
+      case 'cubic-bezier(0.6, 0.04, 0.98, 0.335)':
         return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
       default:
         return t;
@@ -1868,8 +2012,15 @@ class SvgAnimatorEditor {
         svgContent: this.DOM.mainCanvas.outerHTML
       };
 
-      const { animation_id } = await this.animationsService.saveAnimation(animationData);
-      this.state.animationId = animation_id;
+      const res = await saveAnimationRequest(animationData);
+
+      if (!res?.success) {
+        this.showToast('error', res?.error?.message || 'Грешка при запазване.');
+        return;
+      }
+
+      const newId = res.animation_id || res.data?.animation_id || res.data?.id || null;
+      if (newId) this.state.animationId = newId;
 
       this.state.hasUnsavedChanges = false;
 
