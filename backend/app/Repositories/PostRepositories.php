@@ -163,4 +163,46 @@ class PostRepositories
 
         return DataBase::fetchAll($db, $sql, "s", [$createdAt]);
     }
+
+    public static function getMyPosts(mysqli $db, ?int $currentPostId, int $userId)
+    {
+        if ($currentPostId === null) {
+            $sql = "SELECT 
+                    id,
+                    animation_id,
+                    user_id,
+                    description,
+                    likes_count,
+                    dislikes_count,
+                    created_at
+                FROM post
+                WHERE user_id = ?
+                ORDER BY created_at ASC
+                LIMIT 20";
+
+            return DataBase::fetchAll($db, $sql, "i", [$userId]);
+        }
+
+        $sqlCreatedAt = "SELECT created_at FROM post WHERE id = ?";
+        $createdAt = DataBase::fetchValue($db, $sqlCreatedAt, "i", [$currentPostId]);
+
+        if ($createdAt === null) {
+            return [];
+        }
+
+        $sql = "SELECT 
+                id,
+                animation_id,
+                user_id,
+                description,
+                likes_count,
+                dislikes_count,
+                created_at
+            FROM post
+            WHERE created_at > ? AND user_id = ?
+            ORDER BY created_at ASC
+            LIMIT 20";
+
+        return DataBase::fetchAll($db, $sql, "si", [$createdAt, $userId]);
+    }
 }
