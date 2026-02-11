@@ -1,6 +1,6 @@
 /* ========================================
    MY-POSTS.CSS - My Posts Feed Styles
-   Full: layout + cards + tags + comments + modal + edit/delete
+   Updated: PREVIEW ONLY + ConfirmationModal
    ======================================== */
 
 :root {
@@ -79,7 +79,7 @@
   animation: postFadeIn 0.5s ease forwards;
   opacity: 0;
   transform: translateY(16px);
-  cursor: pointer;
+  cursor: default;
 }
 
 @keyframes postFadeIn {
@@ -131,76 +131,6 @@
   color: var(--text-muted);
 }
 
-/* Menu button */
-.post-menu {
-  position: relative;
-}
-
-.post-menu-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  transition: all var(--transition);
-}
-
-.post-menu-btn:hover {
-  background: var(--surface-hover);
-  color: var(--text-secondary);
-}
-
-/* Dropdown */
-.post-menu-dropdown {
-  position: absolute;
-  top: 38px;
-  right: 0;
-  min-width: 160px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(18, 18, 24, 0.85);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
-  overflow: hidden;
-  display: none;
-  z-index: 50;
-}
-
-.post-menu-dropdown.open { display: block; }
-
-.post-menu-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.75rem 0.85rem;
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.9);
-  font-family: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--transition), color var(--transition);
-}
-
-.post-menu-item:hover {
-  background: rgba(255,255,255,0.06);
-}
-
-.post-menu-item.danger {
-  color: rgba(244, 63, 94, 0.95);
-}
-
-.post-menu-item.danger:hover {
-  background: rgba(244, 63, 94, 0.10);
-}
-
 /* Post Content */
 .post-content { padding: 0 1.25rem; }
 
@@ -219,24 +149,12 @@
   overflow: hidden;
 }
 
-/* See more */
-.post-more {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0.1rem 0 0.55rem;
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 0.8125rem;
-  color: var(--accent-primary);
+.post-hint {
+  margin: 0.1rem 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
   font-weight: 600;
-  opacity: 0.9;
-  transition: opacity var(--transition), transform var(--transition);
 }
-
-.post-more:hover { opacity: 1; transform: translateY(-1px); }
 
 /* Hashtags */
 .post-tags {
@@ -292,383 +210,38 @@
 
 .post-media svg { opacity: 0.5; }
 
-/* Actions */
+/* Actions (само delete вдясно) */
 .post-actions {
   display: flex;
   align-items: center;
-  padding: 0.5rem 1.25rem 0.75rem;
+  padding: 0.5rem 1.25rem 0.9rem;
   gap: 0.25rem;
 }
 
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.875rem;
-  border-radius: 10px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  font-family: inherit;
-  transition: all var(--transition);
-  user-select: none;
-}
-
-.action-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-secondary);
-}
-
-.action-btn.liked { color: #F43F5E; }
-.action-btn.liked svg { fill: #F43F5E; }
-.action-btn.disliked { color: #3B82F6; }
-.action-btn.disliked svg { fill: #3B82F6; }
-
-.action-btn .count { font-variant-numeric: tabular-nums; }
 .action-spacer { flex: 1; }
 
-/* Divider */
-.post-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 0 1.25rem;
-}
-
-/* Comments styles (used in modal) */
-.comments-inner { padding: 0.75rem 1.25rem 1rem; }
-
-.comment-input-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.comment-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 0.625rem;
-  font-weight: 700;
-}
-
-.comment-input {
-  flex: 1;
-  padding: 0.5rem 0.875rem;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  outline: none;
-  transition: border-color var(--transition);
-}
-
-.comment-input::placeholder { color: var(--text-muted); }
-.comment-input:focus { border-color: var(--accent-primary); }
-
-.comment-send-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  border: none;
-  color: #fff;
-  transition: all var(--transition);
-  flex-shrink: 0;
-}
-
-.comment-send-btn:hover {
-  background: var(--accent-secondary);
-  transform: scale(1.05);
-}
-
-.comments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  max-height: 420px;
-  overflow-y: auto;
-}
-
-.comments-list::-webkit-scrollbar { width: 4px; }
-.comments-list::-webkit-scrollbar-track { background: transparent; }
-.comments-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.comment-item { display: flex; gap: 0.625rem; }
-.comment-body { flex: 1; min-width: 0; }
-
-.comment-author {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-right: 0.5rem;
-}
-
-.comment-text {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.comment-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.comment-meta span { font-size: 0.6875rem; color: var(--text-muted); }
-
-.comment-meta button {
-  background: none;
-  border: none;
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  padding: 0;
-}
-
-.comment-meta button:hover { color: var(--text-secondary); }
-
-.no-comments {
-  text-align: center;
-  padding: 1rem 0;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-
-/* ===========================
-   MODAL (centered + edit UI)
-   =========================== */
-
-.post-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: none;
-}
-
-.post-modal.open {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.25rem;
-}
-
-.post-modal__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.post-modal__panel {
-  position: relative;
-  width: min(980px, calc(100vw - 2.5rem));
-  max-height: calc(100vh - 2.5rem);
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: rgba(18, 18, 24, 0.75);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  overflow: hidden;
-  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.45);
-}
-
-.post-modal__content {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  min-height: 420px;
-}
-
-.modal-left {
-  padding: 1.1rem 1.2rem 1.2rem;
-  overflow: auto;
-}
-
-.modal-right {
-  border-left: 1px solid var(--border);
-  padding: 1.1rem 1rem 1rem;
-  overflow: auto;
-}
-
-.modal-right.flash { animation: modalFlash 900ms ease; }
-@keyframes modalFlash {
-  0%   { background: rgba(99, 102, 241, 0.10); }
-  100% { background: transparent; }
-}
-
-.modal-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
-
-.modal-close {
-  width: 36px;
-  height: 36px;
+/* Delete button bottom-right */
+.delete-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
-  transition: all var(--transition);
-}
-
-.modal-close:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text-secondary);
-  border-color: var(--border-hover);
-}
-
-.modal-post-text {
-  font-size: 0.95rem;
-  line-height: 1.65;
-  color: var(--text-primary);
-  font-weight: 600;
-  margin: 0.75rem 0 0.65rem;
-}
-
-.modal-left .post-tags { margin: 0.2rem 0 1rem; }
-
-.modal-section-title {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin: 0.5rem 0 0.75rem;
-  text-transform: uppercase;
-}
-
-/* Buttons in modal right */
-.modal-actions {
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.modal-actions .action-btn {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.03);
-}
-
-.manage-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-.manage-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.9);
-  font-family: inherit;
-  font-weight: 700;
-  font-size: 0.82rem;
-  transition: all var(--transition);
-}
-
-.manage-btn:hover {
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(255,255,255,0.14);
-  transform: translateY(-1px);
-}
-
-.manage-btn.danger {
-  color: rgba(244, 63, 94, 0.95);
-  border-color: rgba(244, 63, 94, 0.25);
-  background: rgba(244, 63, 94, 0.08);
-}
-
-.manage-btn.danger:hover {
-  background: rgba(244, 63, 94, 0.14);
-  border-color: rgba(244, 63, 94, 0.35);
-}
-
-/* Edit fields */
-.edit-textarea,
-.edit-tags-input {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.04);
-  color: var(--text-primary);
-  font-family: inherit;
-  outline: none;
-  transition: border-color var(--transition);
-}
-
-.edit-textarea {
-  min-height: 160px;
-  padding: 0.85rem 0.9rem;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  resize: vertical;
-}
-
-.edit-tags-input {
-  height: 44px;
+  height: 38px;
   padding: 0 0.9rem;
-  font-size: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(244, 63, 94, 0.25);
+  background: rgba(244, 63, 94, 0.10);
+  color: rgba(244, 63, 94, 0.95);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.78rem;
+  transition: all var(--transition);
+  white-space: nowrap;
 }
 
-.edit-textarea:focus,
-.edit-tags-input:focus {
-  border-color: var(--accent-primary);
-}
-
-.edit-help {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.edit-actions {
-  display: flex;
-  gap: 0.6rem;
-  margin-top: 0.85rem;
-}
-
-.edit-actions .manage-btn {
-  height: 42px;
-}
-
-@media (max-width: 900px) {
-  .post-modal__content { grid-template-columns: 1fr; }
-  .modal-right { border-left: none; border-top: 1px solid var(--border); }
+.delete-btn:hover {
+  background: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.35);
+  transform: translateY(-1px);
 }
 
 /* ===== Responsive ===== */
@@ -682,8 +255,140 @@
 
   .post-header { padding: 0.875rem 1rem; }
   .post-content { padding: 0 1rem; }
-  .post-actions { padding: 0.5rem 1rem 0.75rem; }
-  .post-divider { margin: 0 1rem; }
+  .post-actions { padding: 0.5rem 1rem 0.9rem; }
 
-  .action-btn { padding: 0.5rem 0.625rem; font-size: 0.75rem; }
+  .delete-btn { font-size: 0.74rem; padding: 0 0.75rem; }
+}
+
+/* =========================================================
+   INLINE CONFIRMATION MODAL (копие от my-projects)
+========================================================= */
+
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition);
+}
+
+.confirm-modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.confirm-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transform: scale(0.9) translateY(20px);
+  transition: transform var(--transition);
+}
+
+.confirm-modal-overlay.active .confirm-modal {
+  transform: scale(1) translateY(0);
+}
+
+.confirm-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.confirm-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.confirm-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.confirm-modal-close:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.confirm-modal-body {
+  padding: 1.25rem 1.5rem;
+}
+
+.confirm-modal-message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+}
+
+.confirm-btn-cancel {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.confirm-btn-cancel:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.confirm-btn-danger {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
+  box-shadow: 0 10px 28px -16px rgba(239, 68, 68, 0.45);
+}
+
+.confirm-btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 36px -18px rgba(239, 68, 68, 0.55);
+  filter: brightness(1.05);
+}
+
+.confirm-btn:active {
+  transform: translateY(1px);
 }
