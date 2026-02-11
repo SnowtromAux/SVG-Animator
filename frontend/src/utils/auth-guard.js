@@ -1,6 +1,6 @@
 import { meRequest } from "../services/auth.js";
 
-const LOGIN_URL = "/svganimator/frontend/login";
+const LOGIN_URL = "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/login";
 
 const LS_USERNAME_KEY = "user.username";
 const LS_EMAIL_KEY = "user.email";

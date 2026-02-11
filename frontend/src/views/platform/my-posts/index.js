@@ -1,4 +1,4 @@
-import { getMyPostsRequest, deletePostRequest } from "/svganimator/frontend/src/services/posts.js";
+import { getMyPostsRequest, deletePostRequest } from "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/src/services/posts.js";
 
 /* =========================
    Utils

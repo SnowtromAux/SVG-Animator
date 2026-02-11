@@ -1,11 +1,11 @@
 import {
   getAllAnimationsRequest,
   deleteAnimationRequest,
-} from "/svganimator/frontend/src/services/animations.js";
+} from "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/src/services/animations.js";
 
 
 
-import { createPostRequest } from "/svganimator/frontend/src/services/posts.js";
+import { createPostRequest } from "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/src/services/posts.js";
 
 /* =========================
    Inline InfoModal
@@ -399,7 +399,7 @@ class ProjectsDashboard {
     });
 
     this.createNewBtn.addEventListener("click", () => {
-      window.location.href = "/svganimator/frontend/platform/editor";
+      window.location.href = "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/platform/editor";
     });
   }
 
@@ -570,7 +570,7 @@ class ProjectsDashboard {
         const action = btn.dataset.action;
 
         if (action === "edit") {
-          window.location.href = `/svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
+          window.location.href = `/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
           return;
         }
 
@@ -589,7 +589,7 @@ class ProjectsDashboard {
     this.projectsGrid.querySelectorAll(".project-card").forEach((card) => {
       card.addEventListener("click", () => {
         const projectId = parseInt(card.dataset.id, 10);
-        window.location.href = `/svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
+        window.location.href = `/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/platform/editor?animation_id=${encodeURIComponent(projectId)}`;
       });
     });
   }

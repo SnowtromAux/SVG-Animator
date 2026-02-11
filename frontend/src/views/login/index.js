@@ -228,7 +228,7 @@ loginForm.addEventListener('submit', async (e) => {
       btnTextEl.textContent = 'Успешен вход!';
 
       setTimeout(() => {
-        window.location.href = "/svganimator/frontend/platform/my-projects";
+        window.location.href = "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/platform/my-projects";
       }, 700);
 
       return;

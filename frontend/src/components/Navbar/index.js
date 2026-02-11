@@ -2,7 +2,7 @@ import { logoutRequest } from "../../services/auth.js";
 
 class Navbar {
   constructor() {
-    this.BASE = "/svganimator/frontend";
+    this.BASE = "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend";
 
     this.navbarContainer = null;
 

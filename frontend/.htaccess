@@ -1,6 +1,6 @@
 Options -MultiViews
 RewriteEngine On
-RewriteBase /svganimator/frontend/
+RewriteBase /w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/
 
 # 1) Реални файлове/папки не ги пипаме
 RewriteCond %{REQUEST_FILENAME} -f [OR]
@@ -8,5 +8,5 @@ RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
 # 2) /login -> src/views/login/index.html (вътрешно)
-RewriteCond %{DOCUMENT_ROOT}/svganimator/frontend/src/views/$1/index.html -f
+RewriteCond %{DOCUMENT_ROOT}/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/src/views/$1/index.html -f
 RewriteRule ^(.+?)/?$ src/views/$1/index.html [L]

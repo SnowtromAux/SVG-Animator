@@ -314,7 +314,7 @@ registerForm.addEventListener('submit', async (e) => {
       btnTextEl.textContent = result.message || 'Регистрацията е успешна.';
 
       setTimeout(() => {
-        window.location.href = "/svganimator/frontend/login";
+        window.location.href = "/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/frontend/login";
       }, 1200);
 
       return;

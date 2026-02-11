@@ -5,12 +5,12 @@ import { API_BASE_URL } from "../constants/env.js";
  *   const MY_POSTS_URL = `${API_BASE_URL}/posts/get-my-posts`;
  * Но ти изрично каза да е към този URL:
  */
-const MY_POSTS_URL = "http://localhost/svganimator/backend/api/posts/get-my-posts";
-const DELETE_POST_URL = "http://localhost/svganimator/backend/api/posts/delete-post";
+const MY_POSTS_URL = "http://localhost/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/backend/api/posts/get-my-posts";
+const DELETE_POST_URL = "http://localhost/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/backend/api/posts/delete-post";
 
 // ✅ Reactions (like / dislike)
-const LIKE_POST_URL = "http://localhost/svganimator/backend/api/posts/like-post";
-const DISLIKE_POST_URL = "http://localhost/svganimator/backend/api/posts/dislike-post";
+const LIKE_POST_URL = "http://localhost/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/backend/api/posts/like-post";
+const DISLIKE_POST_URL = "http://localhost/w25/day3_20260211_306/6MI0800241_8MI0800229_svganimator/backend/api/posts/dislike-post";
 
 async function safeJsonFetch(url, options = {}) {
   console.log("[posts]", options.method || "GET", url);
