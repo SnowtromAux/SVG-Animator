@@ -1,21 +1,21 @@
 <!DOCTYPE html>
 <html lang="bg">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Моите проекти - SVG Animator</title>
 
   <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <!-- Global / Page Styles -->
-  <link rel="stylesheet" href="/svganimator/frontend/globals.css">
-  <link rel="stylesheet" href="/svganimator/frontend/src/views/platform/my-projects/styles.css">
+  <link rel="stylesheet" href="/svganimator/frontend/globals.css" />
+  <link rel="stylesheet" href="/svganimator/frontend/src/views/platform/my-projects/styles.css" />
 
   <!-- Navbar styles -->
-  <link rel="stylesheet" href="/svganimator/frontend/src/components/Navbar/styles.css">
+  <link rel="stylesheet" href="/svganimator/frontend/src/components/Navbar/styles.css" />
 
   <script src="/svganimator/frontend/src/utils/auth-guard.js" type="module"></script>
 </head>
@@ -45,7 +45,7 @@
             <circle cx="9.16667" cy="9.16667" r="5.83333" stroke="currentColor" stroke-width="1.5"/>
             <path d="M16.6667 16.6667L13.3333 13.3333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          <input type="text" id="searchInput" placeholder="Търсене на проекти...">
+          <input type="text" id="searchInput" placeholder="Търсене на проекти..." />
         </div>
         <button class="btn-create" id="createNewBtn">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -126,6 +126,43 @@
       <div class="confirm-modal-footer">
         <button class="confirm-btn confirm-btn-cancel" id="confirmModalCancel">Откажи</button>
         <button class="confirm-btn confirm-btn-danger" id="confirmModalConfirm">Изтрий</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline ShareModal -->
+  <div class="share-modal-overlay" id="shareModalOverlay">
+    <div class="share-modal" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle">
+      <div class="share-modal-header">
+        <h2 class="share-modal-title" id="shareModalTitle">Сподели</h2>
+        <button class="share-modal-close" id="shareModalClose" aria-label="Затвори">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="share-modal-body">
+        <label class="share-label" for="shareDescription">Описание</label>
+        <textarea
+          id="shareDescription"
+          class="share-textarea"
+          placeholder="Напиши кратко описание за публикацията..."
+          rows="4"
+        ></textarea>
+        <div class="share-hint" id="shareHint">Това описание ще се вижда в публикацията.</div>
+      </div>
+
+      <div class="share-modal-footer">
+        <button class="share-btn" id="shareModalSubmit">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M8.333 11.667L16.667 3.333" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            <path d="M13.333 3.333H16.667V6.667" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16.25 10.833V15c0 .92-.746 1.667-1.667 1.667H5.417A1.667 1.667 0 0 1 3.75 15V5.833c0-.92.746-1.666 1.667-1.666H9.583" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Сподели</span>
+        </button>
       </div>
     </div>
   </div>
