@@ -1,8 +1,3 @@
-/* ========================================
-   POSTS.CSS - Social Posts Feed Styles
-   (NO COMMENTS, NO MODAL) + Infinite scroll UI
-   ======================================== */
-
 :root {
   --feed-max: 820px;
 }
@@ -264,6 +259,8 @@
 .post-video-stage {
   width: 100%;
   height: 100%;
+  /* default background (JS will override per-post from animation_settings) */
+  background: rgba(10,10,18,0.35);
 }
 
 .post-video-play {

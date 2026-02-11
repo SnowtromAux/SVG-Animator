@@ -20,8 +20,10 @@ function sanitizeSvg(svgText) {
   const svg = doc.querySelector("svg");
   if (!svg) return "";
 
+  // remove dangerous nodes
   doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
 
+  // remove inline event handlers + javascript: hrefs
   doc.querySelectorAll("*").forEach((el) => {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
@@ -35,6 +37,7 @@ function sanitizeSvg(svgText) {
     });
   });
 
+  // ensure viewBox if missing
   if (!svg.getAttribute("viewBox")) {
     const w = svg.getAttribute("width");
     const h = svg.getAttribute("height");
@@ -472,6 +475,23 @@ function formatTime(seconds) {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
+/* ======= SVG value helpers (editor-like) ======= */
+function ensurePxIfLength(propName, value) {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+
+  if (propName !== "stroke-width" && propName !== "font-size") return s;
+
+  // already has unit
+  if (/^-?\d+(\.\d+)?[a-z%]+$/i.test(s)) return s;
+
+  // pure number => px
+  if (/^-?\d+(\.\d+)?$/.test(s)) return `${s}px`;
+
+  return s;
+}
+
 function parseCssColorToHex(value) {
   if (!value) return "";
   const v = String(value).trim();
@@ -490,6 +510,47 @@ function parseCssColorToHex(value) {
     const g = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[2]))));
     const b = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[3]))));
     return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  }
+
+  // try named colors by browser normalization
+  const test = document.createElement("span");
+  test.style.color = "";
+  test.style.color = v;
+  if (test.style.color) {
+    document.body.appendChild(test);
+    const cs = getComputedStyle(test).color;
+    test.remove();
+    const m = cs.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i);
+    if (m) {
+      const rr = Math.max(0, Math.min(255, Math.round(parseFloat(m[1]))));
+      const gg = Math.max(0, Math.min(255, Math.round(parseFloat(m[2]))));
+      const bb = Math.max(0, Math.min(255, Math.round(parseFloat(m[3]))));
+      return `#${rr.toString(16).padStart(2, "0")}${gg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
+    }
+  }
+
+  return "";
+}
+
+function resolvePaintUrlToHex(svgRoot, urlValue) {
+  const m = String(urlValue || "").match(/^url\(\s*#([^)]+)\s*\)$/i);
+  if (!m) return "";
+
+  const id = m[1];
+  let defsEl = null;
+  try {
+    defsEl = svgRoot.querySelector(`#${CSS.escape(id)}`);
+  } catch {
+    defsEl = null;
+  }
+  if (!defsEl) return "";
+
+  const tag = defsEl.tagName ? defsEl.tagName.toLowerCase() : "";
+  if (tag.includes("gradient")) {
+    const stop = defsEl.querySelector("stop");
+    const stopColor = stop?.getAttribute("stop-color") || stop?.style?.stopColor || "";
+    const hex = parseCssColorToHex(stopColor);
+    if (hex) return hex;
   }
 
   return "";
@@ -511,15 +572,46 @@ function setSvgProperty(element, property, value) {
   }
 }
 
-function getResolvedValue(element, propName) {
+function getStyleAttrValue(element, propName) {
+  const styleAttr = element?.getAttribute?.("style");
+  if (!styleAttr) return "";
+  const parts = String(styleAttr).split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.split(":");
+    if (!k || !rest.length) continue;
+    if (k.trim().toLowerCase() === propName.toLowerCase()) {
+      return rest.join(":").trim();
+    }
+  }
+  return "";
+}
+
+function getFallbackDefaultForProp(propName) {
+  if (propName === "stroke-width") return "1px";
+  if (propName === "font-size") return "16px";
+  if (propName === "opacity") return "1";
+  return "";
+}
+
+function getResolvedValue(svgRoot, element, propName) {
   if (!element) return "";
+
+  // 1) attribute
   let currentValue = element.getAttribute(propName);
 
+  // 2) inline style via CSSStyleDeclaration
   if (!currentValue || String(currentValue).trim() === "") {
     const inline = element.style?.getPropertyValue?.(propName);
     if (inline && inline.trim()) currentValue = inline.trim();
   }
 
+  // 2.5) raw style=""
+  if (!currentValue || String(currentValue).trim() === "") {
+    const raw = getStyleAttrValue(element, propName);
+    if (raw) currentValue = raw;
+  }
+
+  // 3) computed style
   if (!currentValue || String(currentValue).trim() === "") {
     const cs = window.getComputedStyle(element);
     let v = cs.getPropertyValue(propName);
@@ -531,11 +623,19 @@ function getResolvedValue(element, propName) {
     currentValue = v || "";
   }
 
+  // 4) fallback defaults
   if (!currentValue || String(currentValue).trim() === "") {
-    if (propName === "stroke-width") currentValue = "1px";
-    if (propName === "font-size") currentValue = "16px";
-    if (propName === "opacity") currentValue = "1";
+    currentValue = getFallbackDefaultForProp(propName);
   }
+
+  // resolve url(#id) paints
+  if (typeof currentValue === "string" && currentValue.trim().startsWith("url(")) {
+    const resolved = resolvePaintUrlToHex(svgRoot, currentValue.trim());
+    if (resolved) currentValue = resolved;
+  }
+
+  // ensure px for length props
+  currentValue = ensurePxIfLength(propName, currentValue);
 
   return String(currentValue || "").trim();
 }
@@ -632,30 +732,149 @@ function applyEasing(t, easing) {
   }
 }
 
-function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
-  const segments = Array.isArray(rawSegments) ? rawSegments : [];
+/* ======= UID mapping (като editor-а) ======= */
+function isAnimatableNode(node) {
+  if (!node || !node.tagName) return false;
+  const tag = node.tagName.toLowerCase();
 
-  // helper: approximate UID mapping by DOM order if няма selector
+  // skip non-animatable/infrastructure tags
+  if (
+    tag === "svg" ||
+    tag === "defs" ||
+    tag === "style" ||
+    tag === "script" ||
+    tag === "title" ||
+    tag === "desc" ||
+    tag === "metadata" ||
+    tag === "lineargradient" ||
+    tag === "radialgradient" ||
+    tag === "stop" ||
+    tag === "clippath" ||
+    tag === "mask" ||
+    tag === "pattern" ||
+    tag === "filter" ||
+    tag === "symbol"
+  ) return false;
+
+  // skip filter primitives fe*
+  if (tag.startsWith("fe")) return false;
+
+  return true;
+}
+
+function buildUidMap(svgRoot) {
   const uidMap = new Map(); // uid -> element
-  const candidates = [];
-  const skipTags = new Set([
-    "svg", "defs", "style", "script", "title", "desc", "metadata",
-    "lineargradient", "radialgradient", "stop", "clippath", "mask", "pattern"
-  ]);
+  let uid = 0;
 
   const walk = (node) => {
-    if (!node || !node.tagName) return;
-    const tag = node.tagName.toLowerCase();
-    if (!skipTags.has(tag)) {
-      candidates.push(node);
-    }
-    for (const ch of node.children || []) walk(ch);
-  };
-  walk(svgRoot);
+    if (!node || !node.children) return;
 
-  candidates.forEach((node, idx) => {
-    uidMap.set(idx + 1, node);
-  });
+    for (const ch of node.children) {
+      if (!ch || !ch.tagName) continue;
+
+      if (isAnimatableNode(ch)) {
+        uid += 1;
+        uidMap.set(uid, ch);
+      }
+
+      // important: always walk children, even if this node is not animatable
+      walk(ch);
+    }
+  };
+
+  walk(svgRoot);
+  return uidMap;
+}
+
+/* ======= Settings (bg/viewBox) for preview ======= */
+function normalizeLoadedSettings(raw) {
+  const out = {
+    fps: PLAYER_DEFAULT_FPS,
+    useOriginalViewBox: true,
+    viewBox: null,
+    keepCentered: true,
+    canvasBgColor: "#0a0a12",
+    transparentBg: false,
+  };
+
+  if (!raw || typeof raw !== "object") return out;
+
+  if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
+
+  if (typeof raw.useOriginalViewBox === "boolean") out.useOriginalViewBox = raw.useOriginalViewBox;
+
+  if (raw.viewBox && typeof raw.viewBox === "object") {
+    out.viewBox = {
+      minX: Number(raw.viewBox.minX ?? 0) || 0,
+      minY: Number(raw.viewBox.minY ?? 0) || 0,
+      width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
+      height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600),
+    };
+  }
+
+  if (typeof raw.keepCentered === "boolean") out.keepCentered = raw.keepCentered;
+
+  if (typeof raw.canvasBgColor === "string" && raw.canvasBgColor.trim()) {
+    out.canvasBgColor = raw.canvasBgColor.trim();
+  }
+
+  if (typeof raw.transparentBg === "boolean") out.transparentBg = raw.transparentBg;
+
+  return out;
+}
+
+function parseSettings(settingsStrOrObj) {
+  const parsed =
+    typeof settingsStrOrObj === "string"
+      ? safeParseJson(settingsStrOrObj)
+      : (typeof settingsStrOrObj === "object" ? settingsStrOrObj : null);
+
+  return normalizeLoadedSettings(parsed);
+}
+
+function applyPreviewSettings(svgRoot, stageEl, settings) {
+  if (!svgRoot) return;
+
+  // background
+  if (stageEl) {
+    if (settings.transparentBg) {
+      stageEl.style.background = "transparent";
+    } else {
+      stageEl.style.background = settings.canvasBgColor || "#0a0a12";
+    }
+  }
+
+  // viewBox override (ако useOriginalViewBox=false)
+  if (!settings.useOriginalViewBox && settings.viewBox) {
+    const vb = settings.viewBox;
+    svgRoot.setAttribute("viewBox", `${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`);
+  }
+
+  // keepCentered controls preserveAspectRatio alignment
+  svgRoot.setAttribute("preserveAspectRatio", settings.keepCentered ? "xMidYMid meet" : "xMinYMin meet");
+}
+
+/* ======= Segments normalize + chain fromValue ======= */
+function extractAnimPropertyAndToValue(seg) {
+  const animData =
+    typeof seg.animation_data === "string"
+      ? safeParseJson(seg.animation_data)
+      : (seg.animation_data || null);
+
+  if (!animData || typeof animData !== "object") return { property: null, toValue: null };
+
+  const keys = Object.keys(animData);
+  if (!keys.length) return { property: null, toValue: null };
+
+  const property = keys[0];
+  const toValue = animData[property];
+
+  return { property, toValue };
+}
+
+function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
+  const segments = Array.isArray(rawSegments) ? rawSegments : [];
+  const uidMap = buildUidMap(svgRoot);
 
   const parsed = [];
 
@@ -666,21 +885,13 @@ function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
       Math.max(0, (Number(seg.end_at ?? 0) || 0) - start);
 
     const easing = String(seg.easing || "linear");
+    const { property, toValue } = extractAnimPropertyAndToValue(seg);
 
-    const animData =
-      typeof seg.animation_data === "string"
-        ? safeParseJson(seg.animation_data)
-        : (seg.animation_data || null);
-
-    if (!animData || typeof animData !== "object") continue;
-    const keys = Object.keys(animData);
-    if (!keys.length) continue;
-
-    const property = keys[0];
-    const toValue = String(animData[property] ?? "");
+    if (!property) continue;
 
     let targetEl = null;
 
+    // 1) selector
     if (seg.element_selector && typeof seg.element_selector === "string") {
       try {
         targetEl = svgRoot.querySelector(seg.element_selector);
@@ -689,6 +900,7 @@ function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
       }
     }
 
+    // 2) uid mapping (element_id from backend)
     if (!targetEl) {
       const uid = Number(seg.element_id ?? seg.element_uid);
       if (Number.isFinite(uid) && uidMap.has(uid)) {
@@ -698,31 +910,37 @@ function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
 
     if (!targetEl) continue;
 
+    const toNorm = ensurePxIfLength(property, String(toValue ?? ""));
+
     parsed.push({
       element: targetEl,
       property,
-      toValue,
+      toValue: toNorm,
       startTime: Math.max(0, start),
       duration: Math.max(0.001, dur),
       easing,
+      fromValue: "", // will be filled
     });
   }
 
-  // FIX: chain fromValue per element+property by start order
-  const groups = new Map(); // key -> seg[]
+  // chain fromValue per element+property by start order (без toString collisions)
+  const byEl = new Map(); // element -> Map(prop -> seg[])
   for (const s of parsed) {
-    const k = `${s.element}__${s.property}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(s);
+    if (!byEl.has(s.element)) byEl.set(s.element, new Map());
+    const mp = byEl.get(s.element);
+    if (!mp.has(s.property)) mp.set(s.property, []);
+    mp.get(s.property).push(s);
   }
 
-  for (const arr of groups.values()) {
-    arr.sort((a, b) => a.startTime - b.startTime);
-    let prevTo = null;
-    for (const s of arr) {
-      const base = prevTo ?? getResolvedValue(s.element, s.property);
-      s.fromValue = String(base ?? "");
-      prevTo = s.toValue;
+  for (const mp of byEl.values()) {
+    for (const arr of mp.values()) {
+      arr.sort((a, b) => a.startTime - b.startTime);
+      let prevTo = null;
+      for (const s of arr) {
+        const base = prevTo ?? getResolvedValue(svgRoot, s.element, s.property);
+        s.fromValue = ensurePxIfLength(s.property, String(base ?? ""));
+        prevTo = s.toValue;
+      }
     }
   }
 
@@ -730,21 +948,9 @@ function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
 }
 
 function getFpsFromSettings(settings) {
-  if (!settings) return PLAYER_DEFAULT_FPS;
-
-  const parsed =
-    typeof settings === "string" ? safeParseJson(settings) :
-    (typeof settings === "object" ? settings : null);
-
-  if (!parsed || typeof parsed !== "object") return PLAYER_DEFAULT_FPS;
-
-  const fps =
-    Number(parsed.fps) ||
-    Number(parsed?.settings?.fps) ||
-    Number(parsed?.timeline?.fps);
-
+  const s = parseSettings(settings);
+  const fps = Number(s.fps);
   if (Number.isFinite(fps) && fps > 0 && fps <= 120) return fps;
-
   return PLAYER_DEFAULT_FPS;
 }
 
@@ -757,7 +963,7 @@ function computeTotalDuration(segments) {
   return Math.max(0, maxEnd);
 }
 
-function applySegmentsAtTime(segments, tSec) {
+function applySegmentsAtTime(svgRoot, segments, tSec) {
   for (const seg of segments) {
     const st = seg.startTime;
     const en = st + seg.duration;
@@ -778,12 +984,14 @@ function applySegmentsAtTime(segments, tSec) {
     const progress = (tSec - st) / seg.duration;
     const eased = applyEasing(progress, seg.easing);
 
+    // 1) number with unit
     const numWU = interpolateNumberWithUnit(from, to, eased);
     if (numWU !== null) {
-      setSvgProperty(seg.element, seg.property, numWU);
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, numWU));
       continue;
     }
 
+    // 2) plain numeric
     const fromNum = parseFloat(from);
     const toNum = parseFloat(to);
     const fromIsNum = !Number.isNaN(fromNum) && String(from).trim() !== "";
@@ -791,21 +999,25 @@ function applySegmentsAtTime(segments, tSec) {
 
     if (fromIsNum && toIsNum) {
       const v = fromNum + (toNum - fromNum) * eased;
-      setSvgProperty(seg.element, seg.property, String(v));
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, String(v)));
       continue;
     }
 
-    const fromHex = parseCssColorToHex(from);
-    const toHex = parseCssColorToHex(to);
+    // 3) colors (+ url(#grad) resolve)
+    const fromHex = parseCssColorToHex(from) || resolvePaintUrlToHex(svgRoot, from) || "";
+    const toHex = parseCssColorToHex(to) || resolvePaintUrlToHex(svgRoot, to) || "";
+
     if (fromHex && toHex) {
       setSvgProperty(seg.element, seg.property, interpolateColor(fromHex, toHex, eased));
       continue;
     }
 
+    // 4) fallback (step)
     setSvgProperty(seg.element, seg.property, eased < 0.5 ? from : to);
   }
 }
 
+/* ======= Player creation ======= */
 function createPlayerForPost(post) {
   const root = document.querySelector(`.post-video[data-post-id="${post.id}"]`);
   if (!root) return null;
@@ -818,14 +1030,17 @@ function createPlayerForPost(post) {
   const svg = stage?.querySelector("svg");
   if (!svg) return null;
 
-  const fps = getFpsFromSettings(post.animationSettings);
+  const settings = parseSettings(post.animationSettings);
+  applyPreviewSettings(svg, stage, settings);
+
+  const fps = getFpsFromSettings(settings);
   const segs = normalizeSegmentsForPlayer(post.animationSegments, svg);
   const totalDuration = computeTotalDuration(segs);
   const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
   const frameMs = 1000 / fps;
 
   // set initial frame
-  applySegmentsAtTime(segs, 0);
+  applySegmentsAtTime(svg, segs, 0);
 
   const ctrl = {
     postId: post.id,
@@ -864,13 +1079,12 @@ function createPlayerForPost(post) {
       this.currentFrame = Math.floor(elapsed / this.frameMs);
 
       if (this.currentFrame >= this.totalFrames) {
-        // loop
         this.currentFrame = 0;
         this.startTimeMs = now;
       }
 
       const t = this.currentFrame / this.fps;
-      applySegmentsAtTime(this.segments, t);
+      applySegmentsAtTime(this.svg, this.segments, t);
       this.updateHud();
 
       this.rafId = requestAnimationFrame((n) => this.tick(n));
@@ -909,7 +1123,7 @@ function createPlayerForPost(post) {
       this.pause();
       if (reset) {
         this.currentFrame = 0;
-        applySegmentsAtTime(this.segments, 0);
+        applySegmentsAtTime(this.svg, this.segments, 0);
         this.updateHud();
       }
     }
@@ -920,10 +1134,9 @@ function createPlayerForPost(post) {
 }
 
 function hydrateVideoPlayers() {
-  // създаваме/обновяваме players само за visiblePosts
   const visibleIds = new Set(state.visiblePosts.map((p) => p.id));
 
-  // махаме старите контролери за постове, които вече не са рендернати
+  // махаме контролери за постове, които вече не са рендернати
   for (const [postId, ctrl] of players.entries()) {
     if (!visibleIds.has(postId)) {
       ctrl.destroy(false);
