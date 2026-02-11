@@ -38,7 +38,8 @@ class SvgAnimatorEditor {
         active: false,
         stepIndex: null,
         startPointerX: 0,
-        startLeftPx: 0
+        startLeftPx: 0,
+        startScrollLeft: 0
       },
 
       // Settings
@@ -54,11 +55,11 @@ class SvgAnimatorEditor {
     };
 
     this.DOM = {};
+    this._isSyncingTimelineScroll = false;
 
     // bind methods used as listeners
     this.handleFileUpload = this.handleFileUpload.bind(this);
     this.refreshElementsTree = this.refreshElementsTree.bind(this);
-    this.handleClose = this.handleClose.bind(this);
     this.handleSave = this.handleSave.bind(this);
 
     this.setZoom = this.setZoom.bind(this);
@@ -102,7 +103,7 @@ class SvgAnimatorEditor {
     window.editStep = (index) => this.editStep(index);
     window.deleteStep = (index) => this.deleteStep(index);
 
-    // ✅ Load by URL param if exists
+    // Load by URL param if exists
     const urlAnimId = this.getAnimationIdFromUrl();
     if (urlAnimId) {
       this.state.animationId = urlAnimId;
@@ -123,6 +124,76 @@ class SvgAnimatorEditor {
     window.history.replaceState({}, '', url.toString());
   }
 
+  // ===== Settings normalize/load helpers =====
+  safeParseJson(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  }
+
+  normalizeLoadedSettings(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const out = {
+      fps: DEFAULT_FPS,
+      useOriginalViewBox: true,
+      viewBox: { minX: 0, minY: 0, width: 800, height: 600 },
+      originalViewBox: null,
+      keepCentered: true,
+      canvasBgColor: '#0a0a12',
+      transparentBg: false
+    };
+
+    if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
+
+    if (typeof raw.useOriginalViewBox === 'boolean') out.useOriginalViewBox = raw.useOriginalViewBox;
+
+    if (raw.viewBox && typeof raw.viewBox === 'object') {
+      out.viewBox = {
+        minX: Number(raw.viewBox.minX ?? 0) || 0,
+        minY: Number(raw.viewBox.minY ?? 0) || 0,
+        width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
+        height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600)
+      };
+    }
+
+    if (raw.originalViewBox && typeof raw.originalViewBox === 'object') {
+      out.originalViewBox = {
+        minX: Number(raw.originalViewBox.minX ?? 0) || 0,
+        minY: Number(raw.originalViewBox.minY ?? 0) || 0,
+        width: Math.max(1, Number(raw.originalViewBox.width ?? out.viewBox.width) || out.viewBox.width),
+        height: Math.max(1, Number(raw.originalViewBox.height ?? out.viewBox.height) || out.viewBox.height)
+      };
+    }
+
+    if (typeof raw.keepCentered === 'boolean') out.keepCentered = raw.keepCentered;
+
+    if (typeof raw.canvasBgColor === 'string' && raw.canvasBgColor.trim()) {
+      out.canvasBgColor = raw.canvasBgColor.trim();
+    }
+
+    if (typeof raw.transparentBg === 'boolean') out.transparentBg = raw.transparentBg;
+
+    return out;
+  }
+
+  applyLoadedSettingsFromBackend(animationSettingsStr) {
+    const parsed = typeof animationSettingsStr === 'string' ? this.safeParseJson(animationSettingsStr) : null;
+    const normalized = this.normalizeLoadedSettings(parsed);
+    if (!normalized) return false;
+
+    const keepOriginalVB = this.state.settings.originalViewBox;
+    this.state.settings = {
+      ...this.state.settings,
+      ...normalized,
+      originalViewBox: keepOriginalVB
+    };
+
+    return true;
+  }
+
   // ===== Load animation from API =====
   async loadAnimationById(animationId) {
     try {
@@ -138,6 +209,11 @@ class SvgAnimatorEditor {
       // name
       if (anim.name) this.DOM.projectName.value = anim.name;
 
+      // Apply settings first (so loadSVG uses correct viewBox mode)
+      if (anim.animation_settings) {
+        this.applyLoadedSettingsFromBackend(anim.animation_settings);
+      }
+
       // load SVG first (this also rebuilds elements tree)
       if (anim.starting_svg) {
         this.loadSVG(anim.starting_svg);
@@ -151,6 +227,12 @@ class SvgAnimatorEditor {
         this.applyLoadedAnimation(anim);
       }
 
+      // After SVG load, ensure viewBox/background/fps reflect loaded settings
+      this.applyViewBox();
+      this.applyCanvasBackground();
+      this.updateFpsDisplay();
+      this.updateTimeline();
+
       this.state.hasUnsavedChanges = false;
       this.showToast('success', 'Анимацията е заредена');
     } catch (e) {
@@ -159,16 +241,6 @@ class SvgAnimatorEditor {
     }
   }
 
-  safeParseJson(str) {
-    try {
-      return JSON.parse(str);
-    } catch {
-      return null;
-    }
-  }
-
-  // backend: animation_data може да има много пропъртита.
-  // за момента: взимаме първото (както ти беше) – ако искаш split, кажи.
   extractPropertyAndToValue(animObj) {
     if (!animObj || typeof animObj !== 'object') return { property: null, toValue: null };
     const keys = Object.keys(animObj);
@@ -188,19 +260,16 @@ class SvgAnimatorEditor {
     for (const seg of sorted) {
       let elementData = null;
 
-      // 1) normal mapping (ако backend дава element_id / element_uid)
       const elementUid = Number(seg.element_id ?? seg.element_uid);
       if (!Number.isNaN(elementUid)) {
         elementData = this.state.elements.find((el) => el.uid === elementUid) || null;
       }
 
-      // 2) optional selector mapping
       if (!elementData && seg.element_selector) {
         const node = this.DOM.mainCanvas.querySelector(seg.element_selector);
         if (node) elementData = this.state.elements.find((el) => el.element === node) || null;
       }
 
-      // 3) fallback ако има точно 1 елемент
       if (!elementData && this.state.elements.length === 1) {
         elementData = this.state.elements[0];
       }
@@ -214,7 +283,6 @@ class SvgAnimatorEditor {
       const { property, toValue } = this.extractPropertyAndToValue(animData);
       if (!property) continue;
 
-      // find label/type (best effort)
       const tagName = elementData.tagName;
       const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
       const propMeta = props.properties.find((p) => p.name === property);
@@ -239,7 +307,6 @@ class SvgAnimatorEditor {
         property,
         propertyLabel,
 
-        // FROM ще се резолвне live при playback, но за UI оставяме placeholder
         fromValue: this.getResolvedAttributeForInput(elementData.element, property, propMeta?.type || ''),
         toValue: String(toValue),
 
@@ -266,14 +333,12 @@ class SvgAnimatorEditor {
 
     // Top bar
     this.DOM.projectName = d.getElementById('projectName');
-    this.DOM.closeBtn = d.getElementById('closeBtn');
     this.DOM.saveBtn = d.getElementById('saveBtn');
     this.DOM.settingsBtn = d.getElementById('settingsBtn');
     this.DOM.exportBtn = d.getElementById('exportBtn');
 
     // Elements panel
     this.DOM.elementsTree = d.getElementById('elementsTree');
-    this.DOM.refreshTree = d.getElementById('refreshTree');
     this.DOM.uploadSvgBtn = d.getElementById('uploadSvgBtn');
     this.DOM.svgFileInput = d.getElementById('svgFileInput');
 
@@ -357,6 +422,7 @@ class SvgAnimatorEditor {
     this.DOM.timelineSection = d.getElementById('timelineSection');
     this.DOM.timelineResizeHandle = d.getElementById('timelineResizeHandle');
     this.DOM.timelineLabels = d.getElementById('timelineLabels');
+    this.DOM.timelineTracksArea = d.getElementById('timelineTracksArea');
 
     // Export modal
     this.DOM.exportModal = d.getElementById('exportModal');
@@ -450,11 +516,9 @@ class SvgAnimatorEditor {
     // File upload
     this.DOM.uploadSvgBtn.addEventListener('click', () => this.DOM.svgFileInput.click());
     this.DOM.svgFileInput.addEventListener('change', this.handleFileUpload);
-    this.DOM.refreshTree.addEventListener('click', this.refreshElementsTree);
 
     // Top bar
     this.DOM.projectName.addEventListener('input', () => this.markAsChanged());
-    this.DOM.closeBtn.addEventListener('click', this.handleClose);
     this.DOM.saveBtn.addEventListener('click', this.handleSave);
 
     // Zoom controls
@@ -477,6 +541,29 @@ class SvgAnimatorEditor {
     this.DOM.targetElement.addEventListener('change', this.handleElementSelect);
     this.DOM.animationType.addEventListener('change', this.handleAnimationTypeSelect);
     this.DOM.addAnimationBtn.addEventListener('click', this.addOrUpdateAnimationStep);
+
+    // Timeline scroll sync (fix: labels stay aligned on overflow-y scroll)
+    const syncScroll = (sourceEl) => {
+      if (this._isSyncingTimelineScroll) return;
+      this._isSyncingTimelineScroll = true;
+
+      const st = sourceEl.scrollTop || 0;
+      if (this.DOM.timelineLabels) this.DOM.timelineLabels.scrollTop = st;
+
+      requestAnimationFrame(() => {
+        this._isSyncingTimelineScroll = false;
+      });
+    };
+
+    if (this.DOM.timelineWrapper) {
+      this.DOM.timelineWrapper.addEventListener('scroll', () => syncScroll(this.DOM.timelineWrapper), { passive: true });
+    }
+    if (this.DOM.timelineTracksArea) {
+      this.DOM.timelineTracksArea.addEventListener('scroll', () => syncScroll(this.DOM.timelineTracksArea), { passive: true });
+    }
+    if (this.DOM.timelineLabels) {
+      this.DOM.timelineLabels.addEventListener('scroll', () => syncScroll(this.DOM.timelineLabels), { passive: true });
+    }
 
     // Unsaved modal
     this.DOM.discardBtn.addEventListener('click', () => {
@@ -561,7 +648,7 @@ class SvgAnimatorEditor {
 
       const onMouseMove = (ev) => {
         if (!isResizing) return;
-        const dy = startY - ev.clientY; // drag up => bigger
+        const dy = startY - ev.clientY;
         const newHeight = Math.max(120, Math.min(600, startHeight + dy));
         section.style.height = `${newHeight}px`;
       };
@@ -593,17 +680,14 @@ class SvgAnimatorEditor {
   setEditorLocked(isLocked) {
     this.state.isEditorLocked = !!isLocked;
 
-    // Disable add/edit form
     this.DOM.targetElement.disabled = isLocked;
     this.DOM.animationType.disabled = isLocked || !this.DOM.targetElement.value;
     this.DOM.animationStartTime.disabled = isLocked;
     this.DOM.animationDuration.disabled = isLocked;
     this.DOM.animationEasing.disabled = isLocked;
 
-    // button enabled only when type selected and not locked
     this.DOM.addAnimationBtn.disabled = isLocked || !this.DOM.animationType.value;
 
-    // Disable step action buttons (rendered after renderSteps)
     this.DOM.stepsList.querySelectorAll('.step-action-btn').forEach((btn) => {
       btn.disabled = isLocked;
       btn.style.pointerEvents = isLocked ? 'none' : '';
@@ -731,10 +815,8 @@ class SvgAnimatorEditor {
 
   // ===== Reset all editor state on new SVG =====
   resetForNewSvg() {
-    // stop playback if running
     if (this.state.isPlaying) this.stopPlayback();
 
-    // reset steps/timeline
     this.state.steps = [];
     this.state.currentStepIndex = -1;
     this.state.editingStepIndex = null;
@@ -743,7 +825,6 @@ class SvgAnimatorEditor {
     this.state.currentFrame = 0;
     this.state.totalFrames = 0;
 
-    // reset selections/UI
     this.state.selectedElement = null;
 
     this.DOM.targetElement.innerHTML = '<option value="">Изберете елемент</option>';
@@ -763,19 +844,16 @@ class SvgAnimatorEditor {
     this.DOM.animationDuration.value = 1;
     this.DOM.animationEasing.value = 'ease-in-out';
 
-    // reset visuals
     this.renderSteps();
     this.updateTimeline();
     this.updateStepNavigation();
     this.updatePlayhead();
 
-    // unlock editor (will be re-enabled after load)
     this.setEditorLocked(false);
   }
 
   // ===== Load SVG =====
   loadSVG(svgString) {
-    // reset state when switching SVG
     this.resetForNewSvg();
 
     const parser = new DOMParser();
@@ -787,10 +865,8 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // Store SVG content (original document element)
     this.state.svgContent = svgElement;
 
-    // Store original viewBox
     const originalViewBox = svgElement.getAttribute('viewBox');
     if (originalViewBox) {
       const parts = originalViewBox.split(/\s+|,/).map(Number);
@@ -801,37 +877,37 @@ class SvgAnimatorEditor {
           width: parts[2],
           height: parts[3]
         };
+
         if (this.state.settings.useOriginalViewBox) {
           this.state.settings.viewBox = { ...this.state.settings.originalViewBox };
+        } else {
+          // If loaded settings have custom viewBox, keep it as-is.
+          // If missing/invalid, fallback to original.
+          const vb = this.state.settings.viewBox || null;
+          if (!vb || !Number.isFinite(vb.width) || !Number.isFinite(vb.height)) {
+            this.state.settings.viewBox = { ...this.state.settings.originalViewBox };
+          }
         }
       }
     }
 
-    // Display SVG in canvas
     this.DOM.mainCanvas.innerHTML = svgElement.innerHTML;
 
-    // Copy attributes
     Array.from(svgElement.attributes).forEach((attr) => {
       if (attr.name !== 'xmlns') {
         this.DOM.mainCanvas.setAttribute(attr.name, attr.value);
       }
     });
 
-    // Apply viewBox + background
     this.applyViewBox();
     this.applyCanvasBackground();
 
-    // Show canvas, hide placeholder
     this.DOM.canvasPlaceholder.style.display = 'none';
     this.DOM.mainCanvas.style.display = 'block';
 
-    // Build elements tree (animatable only)
     this.buildElementsTree();
-
-    // Enable controls
     this.enableAddPanel();
 
-    // Update UI
     this.updateFpsDisplay();
     this.updateTimeline();
 
@@ -848,7 +924,6 @@ class SvgAnimatorEditor {
     const treeHTML = this.buildTreeHTML(svgElement, 0);
     this.DOM.elementsTree.innerHTML = treeHTML;
 
-    // Click handlers
     this.DOM.elementsTree.querySelectorAll('.tree-item').forEach((item) => {
       item.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -859,7 +934,6 @@ class SvgAnimatorEditor {
       item.addEventListener('mouseleave', () => this.highlightElement(item.dataset.path, false));
     });
 
-    // Toggle handlers
     this.DOM.elementsTree.querySelectorAll('.tree-toggle').forEach((toggle) => {
       toggle.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -867,7 +941,6 @@ class SvgAnimatorEditor {
       });
     });
 
-    // Populate select
     this.updateElementSelect();
   }
 
@@ -960,6 +1033,18 @@ class SvgAnimatorEditor {
     }
   }
 
+  // Dynamic outline thickness: MUCH thicker + scales with canvas size
+  getDynamicHighlightPx() {
+    const container = this.DOM.canvasContainer;
+    const rect = container?.getBoundingClientRect?.();
+    const minDim = rect ? Math.min(rect.width, rect.height) : 800;
+
+    // 1.6% of min dimension, clamped (very visible)
+    const w = Math.max(6, Math.min(32, Math.round(minDim * 0.016)));
+    const off = Math.max(6, Math.min(42, Math.round(w * 1.05)));
+    return { w, off };
+  }
+
   highlightElement(path, isHovering) {
     const elementData = this.state.elements.find((el) => el.path === path);
     if (!elementData || !elementData.element) return;
@@ -969,15 +1054,13 @@ class SvgAnimatorEditor {
     if (isHovering) {
       element.classList.add('svg-element-highlight');
 
-      element._originalOutline = element.style.outline;
-      element._originalOutlineOffset = element.style.outlineOffset;
-
-      element.style.outline = '2px solid rgba(99, 102, 241, 0.8)';
-      element.style.outlineOffset = '2px';
+      const { w, off } = this.getDynamicHighlightPx();
+      element.style.setProperty('--svg-highlight-w', `${w}px`);
+      element.style.setProperty('--svg-highlight-off', `${off}px`);
     } else {
       element.classList.remove('svg-element-highlight');
-      element.style.outline = element._originalOutline || '';
-      element.style.outlineOffset = element._originalOutlineOffset || '';
+      element.style.removeProperty('--svg-highlight-w');
+      element.style.removeProperty('--svg-highlight-off');
     }
   }
 
@@ -1041,7 +1124,7 @@ class SvgAnimatorEditor {
     this.DOM.animationEasing.disabled = this.state.isPlaying;
   }
 
-  // --- Color helpers (resolve url(#gradient) -> actual color)
+  // --- Color helpers
   clamp(n, a, b) {
     return Math.max(a, Math.min(b, n));
   }
@@ -1068,7 +1151,6 @@ class SvgAnimatorEditor {
       return this.rgbToHex(parseFloat(rgbMatch[1]), parseFloat(rgbMatch[2]), parseFloat(rgbMatch[3]));
     }
 
-    // named colors / other: try browser to resolve
     const test = document.createElement('span');
     test.style.color = '';
     test.style.color = v;
@@ -1090,7 +1172,6 @@ class SvgAnimatorEditor {
     const defsEl = this.DOM.mainCanvas.querySelector(`#${CSS.escape(id)}`);
     if (!defsEl) return '';
 
-    // linearGradient / radialGradient
     const tag = defsEl.tagName ? defsEl.tagName.toLowerCase() : '';
     if (tag.includes('gradient')) {
       const stop = defsEl.querySelector('stop');
@@ -1105,13 +1186,11 @@ class SvgAnimatorEditor {
   getResolvedAttributeForInput(element, attrName, propType) {
     let currentValue = element.getAttribute(attrName) || '';
 
-    // If fill/stroke is url(#...), try convert to first stop color
     if (typeof currentValue === 'string' && currentValue.trim().startsWith('url(')) {
       const resolved = this.resolvePaintUrlToHex(currentValue.trim());
       if (resolved) currentValue = resolved;
     }
 
-    // If it is a color in rgb(), convert to hex for UI
     if (propType === 'color') {
       const hex = this.parseCssColorToHex(currentValue);
       if (hex) currentValue = hex;
@@ -1121,7 +1200,6 @@ class SvgAnimatorEditor {
     return currentValue;
   }
 
-  // --- Build inputs: "От" is locked (always taken from SVG attribute), user edits only "До"
   handleAnimationTypeSelect() {
     const propName = this.DOM.animationType.value;
 
@@ -1144,7 +1222,6 @@ class SvgAnimatorEditor {
 
     this.DOM.valueInputs.innerHTML = '';
 
-    // We always render FROM + TO, but FROM is disabled (locked)
     if (prop.type === 'select') {
       const fromRow = document.createElement('div');
       fromRow.className = 'value-input-row';
@@ -1198,7 +1275,6 @@ class SvgAnimatorEditor {
         });
       }, 0);
     } else {
-      // numeric/text
       const inputType = prop.type === 'range' ? 'number' : prop.type;
 
       const fromRow = document.createElement('div');
@@ -1237,7 +1313,6 @@ class SvgAnimatorEditor {
     this.DOM.addAnimationBtn.disabled = this.state.isPlaying;
   }
 
-  // Add or update step (editing mode supported)
   addOrUpdateAnimationStep() {
     if (this.state.isPlaying) {
       this.showToast('error', 'Спрете таймлайна, за да добавяте или редактирате стъпки.');
@@ -1257,14 +1332,18 @@ class SvgAnimatorEditor {
     const prop = props.properties.find((p) => p.name === propName);
     const propType = prop?.type || '';
 
-    // Always re-take FROM from SVG attribute at the moment of saving
     const resolvedFrom = this.getResolvedAttributeForInput(this.state.selectedElement.element, propName, propType);
 
-    // If To empty -> error
     if (!String(toInput.value || '').trim()) {
       this.showToast('error', 'Моля, въведете стойност за "До".');
       return;
     }
+
+    let startTime = parseFloat(this.DOM.animationStartTime.value) || 0;
+    let duration = parseFloat(this.DOM.animationDuration.value) || 1;
+
+    duration = this.clamp(duration, 0.05, MAX_SECONDS);
+    startTime = this.clamp(startTime, 0, Math.max(0, MAX_SECONDS - duration));
 
     const stepObj = {
       id: 0,
@@ -1276,22 +1355,17 @@ class SvgAnimatorEditor {
       propertyLabel: this.DOM.animationType.options[this.DOM.animationType.selectedIndex].text,
       fromValue: resolvedFrom,
       toValue: toInput.value,
-      startTime: parseFloat(this.DOM.animationStartTime.value) || 0,
-      duration: parseFloat(this.DOM.animationDuration.value) || 1,
+      startTime,
+      duration,
       easing: this.DOM.animationEasing.value
     };
 
-    // clamp times
-    stepObj.startTime = this.clamp(stepObj.startTime, 0, MAX_SECONDS);
-    stepObj.duration = this.clamp(stepObj.duration, 0.05, MAX_SECONDS);
-
     if (this.state.editingStepIndex !== null && this.state.editingStepIndex >= 0) {
-      // Update existing
       const idx = this.state.editingStepIndex;
       const existing = this.state.steps[idx];
       if (!existing) return;
 
-      stepObj.id = existing.id; // keep id stable
+      stepObj.id = existing.id;
       this.state.steps[idx] = stepObj;
       this.state.currentStepIndex = idx;
       this.state.editingStepIndex = null;
@@ -1299,7 +1373,6 @@ class SvgAnimatorEditor {
       this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
       this.showToast('success', 'Стъпката е обновена');
     } else {
-      // New step
       this.state.stepCounter = (this.state.stepCounter || 0) + 1;
       stepObj.id = this.state.stepCounter;
 
@@ -1314,7 +1387,6 @@ class SvgAnimatorEditor {
     this.updateTimeline();
     this.updateStepNavigation();
 
-    // reset (keep selected element)
     this.DOM.animationType.value = '';
     this.DOM.animationValues.style.display = 'none';
     this.DOM.valueInputs.innerHTML = '';
@@ -1362,12 +1434,12 @@ class SvgAnimatorEditor {
                 <span class="col-time">${step.startTime}s - ${end}s</span>
                 <span class="col-easing">${step.easing}</span>
                 <span class="col-actions">
-                  <button class="step-action-btn edit" title="Редактирай" onclick="editStep(${index})">
+                  <button class="step-action-btn edit" type="button" onclick="editStep(${index})">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                       <path d="M10.5 1.5L12.5 3.5L4 12H2V10L10.5 1.5Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </button>
-                  <button class="step-action-btn delete" title="Изтрий" onclick="deleteStep(${index})">
+                  <button class="step-action-btn delete" type="button" onclick="deleteStep(${index})">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                       <path d="M2 4H12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                       <path d="M10.5 4V11.5C10.5 12.0523 10.0523 12.5 9.5 12.5H4.5C3.94772 12.5 3.5 12.0523 3.5 11.5V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
@@ -1391,7 +1463,6 @@ class SvgAnimatorEditor {
       });
     });
 
-    // re-apply lock state after re-render
     if (this.state.isPlaying) this.setEditorLocked(true);
   }
 
@@ -1427,25 +1498,20 @@ class SvgAnimatorEditor {
     const step = this.state.steps[index];
     if (!step) return;
 
-    // select element
     this.DOM.targetElement.value = step.elementPath;
     this.handleElementSelect();
 
-    // set editing mode
     this.state.editingStepIndex = index;
     this.state.currentStepIndex = index;
 
-    // fill timing/easing
     this.DOM.animationStartTime.value = step.startTime;
     this.DOM.animationDuration.value = step.duration;
     this.DOM.animationEasing.value = step.easing;
 
-    // select animation prop & rebuild inputs
     setTimeout(() => {
       this.DOM.animationType.value = step.property;
       this.handleAnimationTypeSelect();
 
-      // Now set only TO (FROM is locked and auto-resolved by handleAnimationTypeSelect)
       setTimeout(() => {
         const toInput = document.getElementById('valueTo');
         if (toInput) toInput.value = step.toValue;
@@ -1478,11 +1544,13 @@ class SvgAnimatorEditor {
 
   // ===== Timeline =====
   generateTimelineRuler() {
-    let html = '';
+    // Build with a left sticky spacer so seconds never overlap #1/#2 labels when scrolling
+    const spacer = `<div class="ruler-spacer"></div>`;
+    let marks = '';
     for (let i = 0; i <= MAX_SECONDS; i++) {
-      html += `<div class="ruler-mark ${i % 5 === 0 ? 'major' : ''}">${i}s</div>`;
+      marks += `<div class="ruler-mark ${i % 5 === 0 ? 'major' : ''}">${i}s</div>`;
     }
-    this.DOM.timelineRuler.innerHTML = html;
+    this.DOM.timelineRuler.innerHTML = `${spacer}<div class="ruler-marks">${marks}</div>`;
   }
 
   updateTimeline() {
@@ -1493,6 +1561,11 @@ class SvgAnimatorEditor {
 
     this.state.totalFrames = Math.ceil(totalDuration * this.state.settings.fps) || 0;
     this.DOM.totalTime.textContent = this.formatTime(totalDuration);
+
+    // Ensure timeline width covers 0..60s inclusive (61 slots)
+    const trackWidth = (MAX_SECONDS + 1) * PX_PER_SECOND;
+    if (this.DOM.timelineTracks) this.DOM.timelineTracks.style.minWidth = `${trackWidth}px`;
+    if (this.DOM.timelineRuler) this.DOM.timelineRuler.style.minWidth = `${trackWidth + 120}px`;
 
     let labelsHTML = '';
     let tracksHTML = '';
@@ -1525,12 +1598,17 @@ class SvgAnimatorEditor {
     this.DOM.timelineLabels.innerHTML = labelsHTML;
     this.DOM.timelineTracks.innerHTML = tracksHTML;
 
-    // Attach drag handlers to blocks
+    // Ensure vertical scrolling works when many steps
+    const rowCount = Math.max(1, this.state.steps.length);
+    const rowsHeight = rowCount * 32;
+    this.DOM.timelineTracks.style.height = `${rowsHeight}px`;
+    this.DOM.timelineLabels.style.height = `${rowsHeight}px`;
+    if (this.DOM.timelineTracksArea) this.DOM.timelineTracksArea.style.minHeight = `${rowsHeight}px`;
+
     this.DOM.timelineTracks.querySelectorAll('.frame-block').forEach((block) => {
       block.addEventListener('pointerdown', this.onTimelinePointerDown);
     });
 
-    // Ensure playhead position is consistent after updates
     this.updatePlayhead();
   }
 
@@ -1544,19 +1622,20 @@ class SvgAnimatorEditor {
     const stepIndex = parseInt(block.dataset.step, 10);
     if (Number.isNaN(stepIndex)) return;
 
-    // Start drag
     this.state.drag.active = true;
     this.state.drag.stepIndex = stepIndex;
     this.state.drag.startPointerX = e.clientX;
 
+    // store scrollLeft at drag start
+    this.state.drag.startScrollLeft = this.DOM.timelineWrapper.scrollLeft;
+
+    // FIX: do NOT add scrollLeft here (it breaks when already scrolled)
     const rect = block.getBoundingClientRect();
     const parentRect = this.DOM.timelineTracks.getBoundingClientRect();
-    const currentLeft = rect.left - parentRect.left + this.DOM.timelineWrapper.scrollLeft;
+    const currentLeft = rect.left - parentRect.left;
     this.state.drag.startLeftPx = currentLeft;
 
     block.classList.add('dragging');
-
-    // capture pointer
     block.setPointerCapture?.(e.pointerId);
 
     document.addEventListener('pointermove', this.onTimelinePointerMove);
@@ -1569,25 +1648,23 @@ class SvgAnimatorEditor {
     const step = this.state.steps[idx];
     if (!step) return;
 
-    const dx = e.clientX - this.state.drag.startPointerX;
+    const scrollNow = this.DOM.timelineWrapper.scrollLeft;
+    const scrollDelta = scrollNow - (this.state.drag.startScrollLeft || 0);
+
+    const dx = (e.clientX - this.state.drag.startPointerX) + scrollDelta;
     let newLeft = this.state.drag.startLeftPx + dx;
 
-    // clamp to 0..MAX_SECONDS
-    const minLeft = 0;
-    const maxLeft = MAX_SECONDS * PX_PER_SECOND;
-    newLeft = this.clamp(newLeft, minLeft, maxLeft);
+    const maxStartLeft = Math.max(0, (MAX_SECONDS - (step.duration || 0)) * PX_PER_SECOND);
+    newLeft = this.clamp(newLeft, 0, maxStartLeft);
 
-    // convert to time
-    const newStartTime = this.clamp(newLeft / PX_PER_SECOND, 0, MAX_SECONDS);
-    step.startTime = Math.round(newStartTime * 10) / 10; // 0.1s snap
+    const newStartTime = newLeft / PX_PER_SECOND;
+    step.startTime = Math.round(this.clamp(newStartTime, 0, MAX_SECONDS) * 10) / 10;
 
-    // update UI quickly without full rebuild
     const block = this.DOM.timelineTracks.querySelector(`.frame-block[data-step="${idx}"]`);
     if (block) {
       block.style.left = `${step.startTime * PX_PER_SECOND}px`;
     }
 
-    // Update steps table time live
     this.renderSteps();
   }
 
@@ -1604,7 +1681,6 @@ class SvgAnimatorEditor {
     document.removeEventListener('pointermove', this.onTimelinePointerMove);
     document.removeEventListener('pointerup', this.onTimelinePointerUp);
 
-    // after drag end, rebuild timeline to ensure selection visuals and totals
     this.markAsChanged();
     this.updateTimeline();
     this.renderSteps();
@@ -1726,7 +1802,6 @@ class SvgAnimatorEditor {
         const progress = (currentTime - stepStart) / step.duration;
         const eased = this.applyEasing(progress, step.easing);
 
-        // ensure FROM stays correct if SVG attr changed externally
         const tagName = elementData.tagName;
         const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
         const meta = props.properties.find((p) => p.name === step.property);
@@ -1743,7 +1818,6 @@ class SvgAnimatorEditor {
   }
 
   interpolateValue(element, property, from, to, progress) {
-    // numeric (including units)
     const numWithUnit = this.interpolateNumberWithUnit(from, to, progress);
     if (numWithUnit !== null) {
       element.setAttribute(property, numWithUnit);
@@ -1761,7 +1835,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // colors
     const fromHex = this.parseCssColorToHex(from) || this.resolvePaintUrlToHex(from) || '';
     const toHex = this.parseCssColorToHex(to) || this.resolvePaintUrlToHex(to) || '';
 
@@ -1770,7 +1843,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // fallback discrete
     element.setAttribute(property, progress < 0.5 ? from : to);
   }
 
@@ -1801,11 +1873,11 @@ class SvgAnimatorEditor {
         return t * t;
       case 'ease-out':
         return 1 - (1 - t) * (1 - t);
-      case 'cubic-bezier(0.68, -0.55, 0.265, 1.55)': // Elastic
+      case 'cubic-bezier(0.68, -0.55, 0.265, 1.55)':
         return t < 0.5
           ? (Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2
           : (2 - Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2;
-      case 'cubic-bezier(0.175, 0.885, 0.98, 0.335)': // Back
+      case 'cubic-bezier(0.175, 0.885, 0.32, 1.275)':
         {
           const c1 = 1.70158;
           const c3 = c1 + 1;
@@ -1813,7 +1885,7 @@ class SvgAnimatorEditor {
             ? (Math.pow(2 * t, 2) * ((c3 + 1) * 2 * t - c3)) / 2
             : (Math.pow(2 * t - 2, 2) * ((c3 + 1) * (t * 2 - 2) + c3) + 2) / 2;
         }
-      case 'cubic-bezier(0.6, 0.04, 0.98, 0.335)': // Expo
+      case 'cubic-bezier(0.6, 0.04, 0.98, 0.335)':
         return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
       default:
         return t;
@@ -1849,7 +1921,7 @@ class SvgAnimatorEditor {
     }
 
     this.DOM.useOriginalViewBox.checked = this.state.settings.useOriginalViewBox;
-    this.DOM.viewboxInputs.classList.toggle('disabled', this.state.settings.useOriginalViewBox);
+    this.DOM.viewboxInputs.classList.toggle('disabled', this.DOM.useOriginalViewBox.checked);
 
     this.DOM.viewboxMinX.value = this.state.settings.viewBox.minX;
     this.DOM.viewboxMinY.value = this.state.settings.viewBox.minY;
@@ -1864,13 +1936,13 @@ class SvgAnimatorEditor {
   }
 
   applySettings() {
-    let newFps = 30;
-    const activeOption = document.querySelector('.fps-option.active');
+    let newFps = this.state.settings.fps || DEFAULT_FPS;
 
+    const activeOption = this.DOM.settingsModal.querySelector('.fps-option.active');
     if (activeOption) {
       newFps = parseInt(activeOption.dataset.fps, 10);
     } else if (this.DOM.customFps.value) {
-      newFps = Math.max(1, Math.min(120, parseInt(this.DOM.customFps.value, 10) || 30));
+      newFps = Math.max(1, Math.min(120, parseInt(this.DOM.customFps.value, 10) || newFps));
     }
 
     const useOriginal = this.DOM.useOriginalViewBox.checked;
@@ -1913,7 +1985,7 @@ class SvgAnimatorEditor {
 
   resetSettings() {
     this.state.settings = {
-      fps: 30,
+      fps: DEFAULT_FPS,
       useOriginalViewBox: true,
       viewBox: this.state.settings.originalViewBox
         ? { ...this.state.settings.originalViewBox }
@@ -2015,7 +2087,6 @@ class SvgAnimatorEditor {
     this.state.hasUnsavedChanges = true;
   }
 
-  // CREATE settings payload shape (както искаш)
   buildCreateSettingsPayload() {
     const s = this.state.settings;
     return {
@@ -2032,7 +2103,6 @@ class SvgAnimatorEditor {
     };
   }
 
-  // steps -> backend segments
   buildSaveSegmentsPayload() {
     return this.state.steps.map((step, idx) => {
       const animObj = { [step.property]: step.toValue };
@@ -2059,7 +2129,6 @@ class SvgAnimatorEditor {
         return;
       }
 
-      // 1) Ако няма animationId -> CREATE
       if (!this.state.animationId) {
         const createRes = await createAnimationRequest({
           name: this.DOM.projectName.value || 'Untitled',
@@ -2077,7 +2146,6 @@ class SvgAnimatorEditor {
         this.showToast('success', 'Анимацията е създадена');
       }
 
-      // 2) SAVE (PUT)
       const savePayload = {
         animation_id: this.state.animationId,
         animation_name: this.DOM.projectName.value || 'Untitled',
@@ -2116,14 +2184,6 @@ class SvgAnimatorEditor {
     } catch (e) {
       console.error(e);
       this.showToast('error', 'Грешка при запазване.');
-    }
-  }
-
-  handleClose() {
-    if (this.state.hasUnsavedChanges) {
-      this.showModal(this.DOM.unsavedModal);
-    } else {
-      window.location.href = 'my-projects';
     }
   }
 
@@ -2174,7 +2234,6 @@ class SvgAnimatorEditor {
   }
 
   // ===== Export helpers =====
-  // ✅ NEW: export-safe SVG root (correct viewBox + size + xmlns + preserveAspectRatio + optional background)
   getExportSvgString(exportWidth, exportHeight) {
     const vb = this.state.settings?.viewBox || { minX: 0, minY: 0, width: 800, height: 600 };
 
@@ -2269,7 +2328,6 @@ class SvgAnimatorEditor {
         this.DOM.exportProgressFill.style.width = `${progress}%`;
         this.DOM.exportProgressText.textContent = `${progress}%`;
 
-        // ✅ real-time pacing => correct duration
         await new Promise((r) => setTimeout(r, frameDurationMs));
       }
 
@@ -2317,28 +2375,35 @@ class SvgAnimatorEditor {
     this.DOM.exportProgressText.textContent = '0%';
 
     try {
+      const fps = this.state.settings.fps;
+
+      const vb = this.state.settings?.viewBox || { minX: 0, minY: 0, width: 800, height: 600 };
+      const exportW = Math.max(1, Math.round(vb.width || 800));
+      const exportH = Math.max(1, Math.round(vb.height || 600));
+
       const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 600;
+      canvas.width = exportW;
+      canvas.height = exportH;
       const ctx = canvas.getContext('2d');
 
       const totalDuration = this.state.steps.reduce((max, step) => Math.max(max, step.startTime + step.duration), 0);
-      const totalFrames = Math.ceil(totalDuration * this.state.settings.fps);
+      const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
 
       const frames = [];
 
       for (let frame = 0; frame <= totalFrames; frame++) {
-        const currentTime = frame / this.state.settings.fps;
+        const currentTime = frame / fps;
         this.applyAnimations(currentTime);
 
-        const svgData = new XMLSerializer().serializeToString(this.DOM.mainCanvas);
+        const svgData = this.getExportSvgString(exportW, exportH);
+
         const img = new Image();
         img.crossOrigin = 'anonymous';
 
         await new Promise((resolve) => {
           img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, exportW, exportH);
+            ctx.drawImage(img, 0, 0, exportW, exportH);
 
             canvas.toBlob(
               (blob) => {
@@ -2353,7 +2418,7 @@ class SvgAnimatorEditor {
           img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
         });
 
-        const progress = Math.round((frame / totalFrames) * 100);
+        const progress = Math.round(((frame + 1) / (totalFrames + 1)) * 100);
         this.DOM.exportProgressFill.style.width = `${progress}%`;
         this.DOM.exportProgressText.textContent = `${progress}%`;
 
