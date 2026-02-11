@@ -8,6 +8,8 @@ import {
   saveAnimationRequest
 } from '../../../services/animations.js';
 
+import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+
 // ===== App =====
 class SvgAnimatorEditor {
   constructor() {
@@ -167,8 +169,6 @@ class SvgAnimatorEditor {
     }
   }
 
-  // backend: animation_data може да има много пропъртита.
-  // за момента: взимаме първото (както ти беше) – ако искаш split, кажи.
   extractPropertyAndToValue(animObj) {
     if (!animObj || typeof animObj !== 'object') return { property: null, toValue: null };
     const keys = Object.keys(animObj);
@@ -177,7 +177,6 @@ class SvgAnimatorEditor {
     return { property, toValue: animObj[property] };
   }
 
-  // Convert backend animation -> UI steps
   applyLoadedAnimation(anim) {
     const segments = Array.isArray(anim.animation_segments) ? anim.animation_segments : [];
     const sorted = [...segments].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
@@ -188,19 +187,16 @@ class SvgAnimatorEditor {
     for (const seg of sorted) {
       let elementData = null;
 
-      // 1) normal mapping (ако backend дава element_id / element_uid)
       const elementUid = Number(seg.element_id ?? seg.element_uid);
       if (!Number.isNaN(elementUid)) {
         elementData = this.state.elements.find((el) => el.uid === elementUid) || null;
       }
 
-      // 2) optional selector mapping
       if (!elementData && seg.element_selector) {
         const node = this.DOM.mainCanvas.querySelector(seg.element_selector);
         if (node) elementData = this.state.elements.find((el) => el.element === node) || null;
       }
 
-      // 3) fallback ако има точно 1 елемент
       if (!elementData && this.state.elements.length === 1) {
         elementData = this.state.elements[0];
       }
@@ -214,7 +210,6 @@ class SvgAnimatorEditor {
       const { property, toValue } = this.extractPropertyAndToValue(animData);
       if (!property) continue;
 
-      // find label/type (best effort)
       const tagName = elementData.tagName;
       const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
       const propMeta = props.properties.find((p) => p.name === property);
@@ -239,7 +234,6 @@ class SvgAnimatorEditor {
         property,
         propertyLabel,
 
-        // FROM ще се резолвне live при playback, но за UI оставяме placeholder
         fromValue: this.getResolvedAttributeForInput(elementData.element, property, propMeta?.type || ''),
         toValue: String(toValue),
 
@@ -1068,7 +1062,6 @@ class SvgAnimatorEditor {
       return this.rgbToHex(parseFloat(rgbMatch[1]), parseFloat(rgbMatch[2]), parseFloat(rgbMatch[3]));
     }
 
-    // named colors / other: try browser to resolve
     const test = document.createElement('span');
     test.style.color = '';
     test.style.color = v;
@@ -1090,7 +1083,6 @@ class SvgAnimatorEditor {
     const defsEl = this.DOM.mainCanvas.querySelector(`#${CSS.escape(id)}`);
     if (!defsEl) return '';
 
-    // linearGradient / radialGradient
     const tag = defsEl.tagName ? defsEl.tagName.toLowerCase() : '';
     if (tag.includes('gradient')) {
       const stop = defsEl.querySelector('stop');
@@ -1105,13 +1097,11 @@ class SvgAnimatorEditor {
   getResolvedAttributeForInput(element, attrName, propType) {
     let currentValue = element.getAttribute(attrName) || '';
 
-    // If fill/stroke is url(#...), try convert to first stop color
     if (typeof currentValue === 'string' && currentValue.trim().startsWith('url(')) {
       const resolved = this.resolvePaintUrlToHex(currentValue.trim());
       if (resolved) currentValue = resolved;
     }
 
-    // If it is a color in rgb(), convert to hex for UI
     if (propType === 'color') {
       const hex = this.parseCssColorToHex(currentValue);
       if (hex) currentValue = hex;
@@ -1121,7 +1111,6 @@ class SvgAnimatorEditor {
     return currentValue;
   }
 
-  // --- Build inputs: "От" is locked (always taken from SVG attribute), user edits only "До"
   handleAnimationTypeSelect() {
     const propName = this.DOM.animationType.value;
 
@@ -1144,7 +1133,6 @@ class SvgAnimatorEditor {
 
     this.DOM.valueInputs.innerHTML = '';
 
-    // We always render FROM + TO, but FROM is disabled (locked)
     if (prop.type === 'select') {
       const fromRow = document.createElement('div');
       fromRow.className = 'value-input-row';
@@ -1198,7 +1186,6 @@ class SvgAnimatorEditor {
         });
       }, 0);
     } else {
-      // numeric/text
       const inputType = prop.type === 'range' ? 'number' : prop.type;
 
       const fromRow = document.createElement('div');
@@ -1237,7 +1224,6 @@ class SvgAnimatorEditor {
     this.DOM.addAnimationBtn.disabled = this.state.isPlaying;
   }
 
-  // Add or update step (editing mode supported)
   addOrUpdateAnimationStep() {
     if (this.state.isPlaying) {
       this.showToast('error', 'Спрете таймлайна, за да добавяте или редактирате стъпки.');
@@ -1257,10 +1243,8 @@ class SvgAnimatorEditor {
     const prop = props.properties.find((p) => p.name === propName);
     const propType = prop?.type || '';
 
-    // Always re-take FROM from SVG attribute at the moment of saving
     const resolvedFrom = this.getResolvedAttributeForInput(this.state.selectedElement.element, propName, propType);
 
-    // If To empty -> error
     if (!String(toInput.value || '').trim()) {
       this.showToast('error', 'Моля, въведете стойност за "До".');
       return;
@@ -1281,17 +1265,15 @@ class SvgAnimatorEditor {
       easing: this.DOM.animationEasing.value
     };
 
-    // clamp times
     stepObj.startTime = this.clamp(stepObj.startTime, 0, MAX_SECONDS);
     stepObj.duration = this.clamp(stepObj.duration, 0.05, MAX_SECONDS);
 
     if (this.state.editingStepIndex !== null && this.state.editingStepIndex >= 0) {
-      // Update existing
       const idx = this.state.editingStepIndex;
       const existing = this.state.steps[idx];
       if (!existing) return;
 
-      stepObj.id = existing.id; // keep id stable
+      stepObj.id = existing.id;
       this.state.steps[idx] = stepObj;
       this.state.currentStepIndex = idx;
       this.state.editingStepIndex = null;
@@ -1299,7 +1281,6 @@ class SvgAnimatorEditor {
       this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
       this.showToast('success', 'Стъпката е обновена');
     } else {
-      // New step
       this.state.stepCounter = (this.state.stepCounter || 0) + 1;
       stepObj.id = this.state.stepCounter;
 
@@ -1314,7 +1295,6 @@ class SvgAnimatorEditor {
     this.updateTimeline();
     this.updateStepNavigation();
 
-    // reset (keep selected element)
     this.DOM.animationType.value = '';
     this.DOM.animationValues.style.display = 'none';
     this.DOM.valueInputs.innerHTML = '';
@@ -1391,7 +1371,6 @@ class SvgAnimatorEditor {
       });
     });
 
-    // re-apply lock state after re-render
     if (this.state.isPlaying) this.setEditorLocked(true);
   }
 
@@ -1427,25 +1406,20 @@ class SvgAnimatorEditor {
     const step = this.state.steps[index];
     if (!step) return;
 
-    // select element
     this.DOM.targetElement.value = step.elementPath;
     this.handleElementSelect();
 
-    // set editing mode
     this.state.editingStepIndex = index;
     this.state.currentStepIndex = index;
 
-    // fill timing/easing
     this.DOM.animationStartTime.value = step.startTime;
     this.DOM.animationDuration.value = step.duration;
     this.DOM.animationEasing.value = step.easing;
 
-    // select animation prop & rebuild inputs
     setTimeout(() => {
       this.DOM.animationType.value = step.property;
       this.handleAnimationTypeSelect();
 
-      // Now set only TO (FROM is locked and auto-resolved by handleAnimationTypeSelect)
       setTimeout(() => {
         const toInput = document.getElementById('valueTo');
         if (toInput) toInput.value = step.toValue;
@@ -1525,12 +1499,10 @@ class SvgAnimatorEditor {
     this.DOM.timelineLabels.innerHTML = labelsHTML;
     this.DOM.timelineTracks.innerHTML = tracksHTML;
 
-    // Attach drag handlers to blocks
     this.DOM.timelineTracks.querySelectorAll('.frame-block').forEach((block) => {
       block.addEventListener('pointerdown', this.onTimelinePointerDown);
     });
 
-    // Ensure playhead position is consistent after updates
     this.updatePlayhead();
   }
 
@@ -1544,7 +1516,6 @@ class SvgAnimatorEditor {
     const stepIndex = parseInt(block.dataset.step, 10);
     if (Number.isNaN(stepIndex)) return;
 
-    // Start drag
     this.state.drag.active = true;
     this.state.drag.stepIndex = stepIndex;
     this.state.drag.startPointerX = e.clientX;
@@ -1556,7 +1527,6 @@ class SvgAnimatorEditor {
 
     block.classList.add('dragging');
 
-    // capture pointer
     block.setPointerCapture?.(e.pointerId);
 
     document.addEventListener('pointermove', this.onTimelinePointerMove);
@@ -1572,22 +1542,18 @@ class SvgAnimatorEditor {
     const dx = e.clientX - this.state.drag.startPointerX;
     let newLeft = this.state.drag.startLeftPx + dx;
 
-    // clamp to 0..MAX_SECONDS
     const minLeft = 0;
     const maxLeft = MAX_SECONDS * PX_PER_SECOND;
     newLeft = this.clamp(newLeft, minLeft, maxLeft);
 
-    // convert to time
     const newStartTime = this.clamp(newLeft / PX_PER_SECOND, 0, MAX_SECONDS);
-    step.startTime = Math.round(newStartTime * 10) / 10; // 0.1s snap
+    step.startTime = Math.round(newStartTime * 10) / 10;
 
-    // update UI quickly without full rebuild
     const block = this.DOM.timelineTracks.querySelector(`.frame-block[data-step="${idx}"]`);
     if (block) {
       block.style.left = `${step.startTime * PX_PER_SECOND}px`;
     }
 
-    // Update steps table time live
     this.renderSteps();
   }
 
@@ -1604,7 +1570,6 @@ class SvgAnimatorEditor {
     document.removeEventListener('pointermove', this.onTimelinePointerMove);
     document.removeEventListener('pointerup', this.onTimelinePointerUp);
 
-    // after drag end, rebuild timeline to ensure selection visuals and totals
     this.markAsChanged();
     this.updateTimeline();
     this.renderSteps();
@@ -1726,7 +1691,6 @@ class SvgAnimatorEditor {
         const progress = (currentTime - stepStart) / step.duration;
         const eased = this.applyEasing(progress, step.easing);
 
-        // ensure FROM stays correct if SVG attr changed externally
         const tagName = elementData.tagName;
         const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
         const meta = props.properties.find((p) => p.name === step.property);
@@ -1743,7 +1707,6 @@ class SvgAnimatorEditor {
   }
 
   interpolateValue(element, property, from, to, progress) {
-    // numeric (including units)
     const numWithUnit = this.interpolateNumberWithUnit(from, to, progress);
     if (numWithUnit !== null) {
       element.setAttribute(property, numWithUnit);
@@ -1761,7 +1724,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // colors
     const fromHex = this.parseCssColorToHex(from) || this.resolvePaintUrlToHex(from) || '';
     const toHex = this.parseCssColorToHex(to) || this.resolvePaintUrlToHex(to) || '';
 
@@ -1770,7 +1732,6 @@ class SvgAnimatorEditor {
       return;
     }
 
-    // fallback discrete
     element.setAttribute(property, progress < 0.5 ? from : to);
   }
 
@@ -2015,7 +1976,6 @@ class SvgAnimatorEditor {
     this.state.hasUnsavedChanges = true;
   }
 
-  // CREATE settings payload shape (както искаш)
   buildCreateSettingsPayload() {
     const s = this.state.settings;
     return {
@@ -2032,7 +1992,6 @@ class SvgAnimatorEditor {
     };
   }
 
-  // steps -> backend segments
   buildSaveSegmentsPayload() {
     return this.state.steps.map((step, idx) => {
       const animObj = { [step.property]: step.toValue };
@@ -2059,7 +2018,6 @@ class SvgAnimatorEditor {
         return;
       }
 
-      // 1) Ако няма animationId -> CREATE
       if (!this.state.animationId) {
         const createRes = await createAnimationRequest({
           name: this.DOM.projectName.value || 'Untitled',
@@ -2077,7 +2035,6 @@ class SvgAnimatorEditor {
         this.showToast('success', 'Анимацията е създадена');
       }
 
-      // 2) SAVE (PUT)
       const savePayload = {
         animation_id: this.state.animationId,
         animation_name: this.DOM.projectName.value || 'Untitled',
@@ -2260,6 +2217,8 @@ class SvgAnimatorEditor {
     }
   }
 
+  // ✅ MODIFIED: Export frames as ONE ZIP containing a folder named $ANIMATION_NAME
+  // and inside: frame_00000.svg, frame_00001.svg, ...
   async handleExportFrames() {
     if (this.state.steps.length === 0) {
       this.showToast('error', 'Няма стъпки за експортиране.');
@@ -2271,58 +2230,49 @@ class SvgAnimatorEditor {
     this.DOM.exportProgressText.textContent = '0%';
 
     try {
-      const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 600;
-      const ctx = canvas.getContext('2d');
+      const totalDuration = this.state.steps.reduce(
+        (max, step) => Math.max(max, step.startTime + step.duration),
+        0
+      );
 
-      const totalDuration = this.state.steps.reduce((max, step) => Math.max(max, step.startTime + step.duration), 0);
-      const totalFrames = Math.ceil(totalDuration * this.state.settings.fps);
+      const fps = this.state.settings.fps;
+      const totalFrames = Math.ceil(totalDuration * fps);
 
-      const frames = [];
+      const rawName = (this.DOM.projectName.value || 'animation').trim();
+      const folderName = rawName.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+
+      const zip = new JSZip();
+      const folder = zip.folder(folderName);
 
       for (let frame = 0; frame <= totalFrames; frame++) {
-        const currentTime = frame / this.state.settings.fps;
+        const currentTime = frame / fps;
         this.applyAnimations(currentTime);
 
+        // Serialize full SVG
         const svgData = new XMLSerializer().serializeToString(this.DOM.mainCanvas);
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
 
-        await new Promise((resolve) => {
-          img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            canvas.toBlob(
-              (blob) => {
-                frames.push({ name: `frame_${String(frame).padStart(5, '0')}.png`, blob });
-                resolve();
-              },
-              'image/png',
-              1
-            );
-          };
-          img.onerror = resolve;
-          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-        });
+        const fileName = `frame_${String(frame).padStart(5, '0')}.svg`;
+        folder.file(fileName, svgData);
 
         const progress = Math.round((frame / totalFrames) * 100);
         this.DOM.exportProgressFill.style.width = `${progress}%`;
         this.DOM.exportProgressText.textContent = `${progress}%`;
 
-        await new Promise((r) => setTimeout(r, 1));
+        await new Promise((r) => setTimeout(r, 0));
       }
 
-      for (const frame of frames) {
-        const url = URL.createObjectURL(frame.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = frame.name;
-        a.click();
-        URL.revokeObjectURL(url);
-        await new Promise((r) => setTimeout(r, 30));
-      }
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      });
+
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${folderName}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
 
       this.DOM.exportProgressFill.style.width = '100%';
       this.DOM.exportProgressText.textContent = '100%';
@@ -2330,10 +2280,11 @@ class SvgAnimatorEditor {
       setTimeout(() => {
         this.DOM.exportProgress.style.display = 'none';
         this.hideModal(this.DOM.exportModal);
-      }, 1000);
+      }, 900);
 
-      this.showToast('success', 'Кадрите са експортирани');
-    } catch {
+      this.showToast('success', 'Експортът (ZIP) е готов');
+    } catch (e) {
+      console.error(e);
       this.showToast('error', 'Грешка при експортирането на кадри.');
       this.DOM.exportProgress.style.display = 'none';
     }
