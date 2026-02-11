@@ -2597,6 +2597,83 @@ class SvgAnimatorEditor {
   }
 }
 
+function ensureToastRoot() {
+  let root = document.getElementById("toastRoot");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "toastRoot";
+    root.className = "toast-root";
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function showToast(message, type = "error", ms = 2600) {
+  const root = ensureToastRoot();
+
+  const t = document.createElement("div");
+  t.className = `toast toast-${type}`;
+  t.setAttribute("role", "status");
+  t.innerHTML = `
+    <div class="toast-dot"></div>
+    <div class="toast-text">${message}</div>
+  `;
+
+  root.appendChild(t);
+
+  requestAnimationFrame(() => t.classList.add("show"));
+
+  const close = () => {
+    t.classList.remove("show");
+    t.classList.add("hide");
+    setTimeout(() => t.remove(), 220);
+  };
+
+  const timer = setTimeout(close, ms);
+  t.addEventListener("click", () => {
+    clearTimeout(timer);
+    close();
+  });
+}
+
+function isTimelinePlaying() {
+  const playBtn = document.getElementById("playPause");
+  return !!playBtn && playBtn.classList.contains("playing");
+}
+
+function attachGuard(btnId) {
+  const el = document.getElementById(btnId);
+  if (!el) return;
+
+  // capture phase to stop other handlers early
+  el.addEventListener(
+    "click",
+    (e) => {
+      if (!isTimelinePlaying()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showToast("Моля изключете анимацията преди да запазите", "error");
+    },
+    true
+  );
+}
+
+// Guard: Save, Save&Close, Export open, Export actions
+attachGuard("saveBtn");
+attachGuard("saveAndCloseBtn");
+attachGuard("exportBtn");
+attachGuard("exportVideoBtn");
+attachGuard("exportFramesBtn");
+
+// Optional: Ctrl/Cmd + S
+window.addEventListener("keydown", (e) => {
+  const isSaveCombo = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s";
+  if (!isSaveCombo) return;
+  if (!isTimelinePlaying()) return;
+
+  e.preventDefault();
+  showToast("Моля изключете анимацията преди да запазите", "error");
+});
 // ===== Boot =====
 document.addEventListener('DOMContentLoaded', () => {
   const app = new SvgAnimatorEditor();

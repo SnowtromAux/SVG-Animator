@@ -649,7 +649,9 @@
   flex: 1;
   min-height: 0;
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Ruler: spacer + marks (so seconds never overlap labels) */
@@ -660,7 +662,10 @@
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 7;
+
+  /* FIX: keep it always above tracks */
+  z-index: 50;
+
   min-width: 3780px; /* 120 labels + 3660 timeline (0..60 inclusive) */
 }
 
@@ -699,6 +704,17 @@
 .timeline-tracks-container {
   display: flex;
   min-width: 3780px; /* 120 labels + 3660 timeline */
+
+  /* FIX: Y scroll only here */
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* fill space under ruler */
+  flex: 1;
+  min-height: 0;
+
+  position: relative;
+  z-index: 1;
 }
 
 /* Labels column: make it scrollable vertically (JS keeps it in sync) */
@@ -707,7 +723,7 @@
   min-width: 120px;
   position: sticky;
   left: 0;
-  z-index: 6;
+  z-index: 20; /* keep above playhead/blocks */
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
 
@@ -787,7 +803,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  z-index: 5; /* below labels (6), above blocks (3) */
+  z-index: 10; /* below labels (20), above blocks (3) */
   pointer-events: none;
   transition: left 0.05s linear;
 }
@@ -1914,4 +1930,63 @@
     width: 36px;
     height: 36px;
   }
+}
+
+/* ============================
+   TOASTS
+============================ */
+.toast-root {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 520px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(10, 10, 26, 0.92);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  color: rgba(255,255,255,0.92);
+
+  transform: translateY(-10px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.hide {
+  transform: translateY(-6px);
+  opacity: 0;
+}
+
+.toast-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.95);
+  box-shadow: 0 0 12px rgba(248, 113, 113, 0.45);
+  flex-shrink: 0;
+}
+
+.toast-text {
+  font-size: 0.875rem;
+  line-height: 1.35;
+  color: rgba(255,255,255,0.92);
 }
