@@ -1,7 +1,10 @@
 import { API_BASE_URL } from "../constants/env.js";
 
+/**
+ * Helper: safe fetch -> JSON {success,...} или fallback error
+ */
 async function safeJsonFetch(url, options = {}) {
-  console.log("[posts]", options.method || "GET", url);
+  console.log("[animations]", options.method || "GET", url);
 
   let response;
   try {
@@ -10,7 +13,7 @@ async function safeJsonFetch(url, options = {}) {
       ...options,
     });
   } catch (err) {
-    console.error("[posts] NETWORK ERROR", err);
+    console.error("[animations] NETWORK ERROR", err);
     return {
       success: false,
       error: { code: "NETWORK_ERROR", message: "Няма връзка със сървъра. Опитайте отново." },
@@ -23,12 +26,13 @@ async function safeJsonFetch(url, options = {}) {
   try {
     data = text ? JSON.parse(text) : null;
   } catch (e) {
-    console.error("[posts] Non-JSON response body:", text);
+    console.error("[animations] Non-JSON response body:", text);
     data = null;
   }
 
-  console.log("[posts] status:", response.status, "data:", data);
+  console.log("[animations] status:", response.status, "data:", data);
 
+  // ако backend връща {success:...} – връщаме директно
   if (data && typeof data === "object" && "success" in data) return data;
 
   if (!response.ok) {
@@ -41,31 +45,57 @@ async function safeJsonFetch(url, options = {}) {
   return { success: true, data };
 }
 
-export async function getAllPostsRequest({ currentPostId } = {}) {
-  const base = `${API_BASE_URL}/posts/get-all-posts`;
-
-  const hasParam =
-    currentPostId !== undefined &&
-    currentPostId !== null &&
-    String(currentPostId).trim() !== "";
-
-  const url = hasParam
-    ? `${base}?current_post_id=${encodeURIComponent(String(currentPostId))}`
-    : base;
-
+// GET /animation/get-animation?animation_id=XXX
+export async function getAnimationRequest({ animationId } = {}) {
+  const url = `${API_BASE_URL}/animation/get-animation?animation_id=${encodeURIComponent(animationId ?? "")}`;
   return safeJsonFetch(url, { method: "GET" });
 }
 
-export async function createPostRequest({ animationId, description } = {}) {
-  const url = `${API_BASE_URL}/posts/create-post`;
+// POST /animation/create-animation
+// Body: { name, svg_text, settings }
+export async function createAnimationRequest({ name, svgText, settings } = {}) {
+  const url = `${API_BASE_URL}/animation/create-animation`;
 
   const payload = {
-    animation_id: String(animationId ?? ""),
-    description: String(description ?? ""),
+    name: name ?? "Untitled",
+    svg_text: svgText ?? "",
+    settings: settings ?? {},
   };
 
   return safeJsonFetch(url, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+// PUT /animation/save-animation
+export async function saveAnimationRequest(payload = {}) {
+  const url = `${API_BASE_URL}/animation/save-animation`;
+
+  return safeJsonFetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+// GET /animation/get-all-animations?page=1&search_text=...
+export async function getAllAnimationsRequest({ page = 1, searchText = "" } = {}) {
+  const url = `${API_BASE_URL}/animation/get-all-animations?page=${encodeURIComponent(page)}&search_text=${encodeURIComponent(
+    searchText
+  )}`;
+
+  return safeJsonFetch(url, { method: "GET" });
+}
+
+// DELETE /animation/delete-animation
+export async function deleteAnimationRequest({ animationId } = {}) {
+  const url = `${API_BASE_URL}/animation/delete-animation`;
+  const payload = { animation_id: animationId };
+
+  return safeJsonFetch(url, {
+    method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
