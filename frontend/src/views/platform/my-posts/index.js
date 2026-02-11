@@ -335,7 +335,7 @@ function renderPostCard(post, index) {
           <span class="post-time">${escapeHtml(dateLabel)}</span>
         </div>
 
-        <!-- ✅ ВЪРНАТ delete бутон -->
+        <!-- ВЪРНАТ delete бутон -->
         <button
           class="post-delete-btn"
           type="button"
@@ -1138,7 +1138,7 @@ function initEvents() {
     if (action === "dislike") toggleDislike(postId);
     if (action === "toggle-video") toggleVideo(postId);
 
-    // ✅ delete
+    // delete
     if (action === "delete") requestDelete(postId);
   });
 }

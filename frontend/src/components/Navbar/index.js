@@ -87,7 +87,7 @@ class Navbar {
     await this.loadNavbar();
 
     this.cacheElements();
-    this.bindAuthEvents(); // ✅ слуша auth:user-ready
+    this.bindAuthEvents(); // слуша auth:user-ready
     this.renderNav();
     this.applyActiveFromKeys();
 
@@ -97,7 +97,7 @@ class Navbar {
     this.updateNavCollapse();
   }
 
-  // ✅ Когато auth-guard запише localStorage, той dispatch-ва auth:user-ready
+  // Когато auth-guard запише localStorage, той dispatch-ва auth:user-ready
   // Navbar слуша и обновява UI веднага (без рефреш).
   bindAuthEvents() {
     window.addEventListener("auth:user-ready", (e) => {

@@ -178,7 +178,7 @@
   color: var(--text-muted);
 }
 
-/* ✅ delete button in header */
+/* delete button in header */
 .post-delete-btn {
   display: inline-flex;
   align-items: center;
@@ -203,7 +203,7 @@
   border-color: rgba(239, 68, 68, 0.35);
 }
 
-/* ✅ three-dots menu button (ползва се в новия render) */
+/* three-dots menu button (ползва се в новия render) */
 .post-menu-btn {
   display: flex;
   align-items: center;
@@ -394,7 +394,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ✅ readonly states */
+/* readonly states */
 .action-btn.readonly:disabled {
   opacity: 0.9;
   cursor: not-allowed;

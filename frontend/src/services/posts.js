@@ -104,7 +104,7 @@ export async function createPostRequest({ animationId, description } = {}) {
   });
 }
 
-/** ✅ DELETE пост */
+/** DELETE пост */
 export async function deletePostRequest({ postId } = {}) {
   const payload = { post_id: Number(postId) };
 
