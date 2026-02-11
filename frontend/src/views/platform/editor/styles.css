@@ -906,16 +906,19 @@
 
 /* Steps List */
 .steps-content {
+  --steps-actions-width: 80px;
   min-height: 110px;
   max-height: 220px;
   overflow-y: auto;
   overflow-x: auto;
-  padding-bottom: 10px; /* FIX: horizontal scrollbar always reachable */
+
+  padding-bottom: 10px;
+  padding-right: calc(10px + var(--steps-actions-width));
 }
 
 /* Steps Table (fix: actions column inside + blue header background) */
 .steps-table {
-  width: 100%;
+  width: fit-content;
   min-width: 940px;
   font-size: 0.6875rem;
   font-family: 'JetBrains Mono', monospace;
@@ -938,7 +941,7 @@
     minmax(110px, 0.9fr)
     minmax(140px, 1fr)
     minmax(120px, 0.9fr)
-    140px; /* FIX: wider sticky actions */
+    var(--steps-actions-width); /* ✅ FIX: use the same width var */
   align-items: center;
   padding: 0 0.75rem;
   column-gap: 0.5rem;
@@ -1006,6 +1009,10 @@
   justify-content: flex-end;
   align-items: center;
   overflow: hidden; /* keep inside the grid cell */
+
+  /* ✅ FIX: keep stable width so it never collapses and never "pushes" visually over EASING */
+  width: var(--steps-actions-width);
+  min-width: var(--steps-actions-width);
 }
 
 /* FIX: keep Actions column always visible (sticky to the right) */
@@ -1016,25 +1023,9 @@
   z-index: 3;
   justify-content: flex-end;
   padding-right: 6px;
-  box-shadow: -12px 0 18px rgba(0, 0, 0, 0.35);
 }
 
-.steps-table-header .col-actions {
-  background: rgba(99, 102, 241, 0.16);
-  z-index: 4;
-}
 
-.steps-table-row .col-actions {
-  background: rgba(10, 10, 26, 0.75);
-}
-
-.steps-table-row:hover .col-actions {
-  background: rgba(10, 10, 26, 0.85);
-}
-
-.steps-table-row.active .col-actions {
-  background: rgba(10, 10, 26, 0.9);
-}
 
 /* Action buttons colors (EDIT + DELETE) */
 .step-action-btn {
