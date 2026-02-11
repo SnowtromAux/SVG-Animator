@@ -49,7 +49,6 @@ function hasAnyUsefulAttribute(el) {
 
   const candidates = [
     'opacity',
-    'transform',
     'fill',
     'stroke',
     'stroke-width',
@@ -62,8 +61,7 @@ function hasAnyUsefulAttribute(el) {
     'ry',
     'width',
     'height',
-    'd',
-    'points'
+    'font-size'
   ];
 
   return candidates.some((attr) => el.hasAttribute(attr));
@@ -74,7 +72,7 @@ function hasAnyUsefulAttribute(el) {
  * - excludes technical tags in EXCLUDED_TAGS
  * - excludes <svg> itself (we animate inner nodes)
  * - includes shapes + groups
- * - for <g>, we show it if it has children OR has useful attributes (opacity/transform/id/class)
+ * - for <g>, we show it if it has children OR has useful attributes (opacity/fill/stroke/geometry/id/class)
  */
 export function isAnimatableNode(node) {
   if (!node || !node.tagName) return false;

@@ -8,7 +8,6 @@ import {
   saveAnimationRequest
 } from '../../../services/animations.js';
 
-// ===== App =====
 class SvgAnimatorEditor {
   constructor() {
     this.state = {
@@ -33,7 +32,6 @@ class SvgAnimatorEditor {
       stepCounter: 0,
       elementCounter: 0,
 
-      // Drag state for timeline
       drag: {
         active: false,
         stepIndex: null,
@@ -42,7 +40,6 @@ class SvgAnimatorEditor {
         startScrollLeft: 0
       },
 
-      // Settings
       settings: {
         fps: DEFAULT_FPS,
         useOriginalViewBox: true,
@@ -51,13 +48,20 @@ class SvgAnimatorEditor {
         keepCentered: true,
         canvasBgColor: '#0a0a12',
         transparentBg: false
-      }
+      },
+
+      // Grouped steps for correct playback and for avoiding “reset” conflicts
+      stepGroups: new Map(),
+      stepGroupsDirty: true,
+
+      // RAF
+      rafId: null
     };
 
     this.DOM = {};
     this._isSyncingTimelineScroll = false;
 
-    // bind methods used as listeners
+    // binds
     this.handleFileUpload = this.handleFileUpload.bind(this);
     this.refreshElementsTree = this.refreshElementsTree.bind(this);
     this.handleSave = this.handleSave.bind(this);
@@ -84,7 +88,6 @@ class SvgAnimatorEditor {
     this.handleExportVideo = this.handleExportVideo.bind(this);
     this.handleExportFrames = this.handleExportFrames.bind(this);
 
-    // Timeline drag handlers
     this.onTimelinePointerDown = this.onTimelinePointerDown.bind(this);
     this.onTimelinePointerMove = this.onTimelinePointerMove.bind(this);
     this.onTimelinePointerUp = this.onTimelinePointerUp.bind(this);
@@ -96,14 +99,16 @@ class SvgAnimatorEditor {
     this.generateTimelineRuler();
     this.applyCanvasBackground();
     this.updateFpsDisplay();
-
     this.initToasts();
 
-    // expose for inline onclick handlers
+    // remove elastic/expo/back options from easing dropdown
+    this.pruneUnsupportedEasings();
+
+    // expose step actions (existing HTML uses onclick)
     window.editStep = (index) => this.editStep(index);
     window.deleteStep = (index) => this.deleteStep(index);
 
-    // Load by URL param if exists
+    // load by URL param if exists
     const urlAnimId = this.getAnimationIdFromUrl();
     if (urlAnimId) {
       this.state.animationId = urlAnimId;
@@ -111,7 +116,9 @@ class SvgAnimatorEditor {
     }
   }
 
-  // ===== URL helpers =====
+  // ===========================
+  // URL helpers
+  // ===========================
   getAnimationIdFromUrl() {
     const url = new URL(window.location.href);
     const id = url.searchParams.get('animation_id');
@@ -124,210 +131,88 @@ class SvgAnimatorEditor {
     window.history.replaceState({}, '', url.toString());
   }
 
-  // ===== Settings normalize/load helpers =====
-  safeParseJson(str) {
-    try {
-      return JSON.parse(str);
-    } catch {
-      return null;
+  // ===========================
+  // Toasts
+  // ===========================
+  initToasts() {
+    if (!document.getElementById('toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'toast-styles';
+      style.textContent = `
+        .toast-container{
+          position: fixed;
+          top: 14px;
+          left: 50%;
+          transform: translateX(-50%);
+          z-index: 99999;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          pointer-events: none;
+        }
+        .toast{
+          pointer-events: auto;
+          min-width: 280px;
+          max-width: 560px;
+          padding: 10px 12px;
+          border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.35);
+          backdrop-filter: blur(8px);
+          font-size: 13px;
+          line-height: 1.35;
+          display:flex;
+          align-items:flex-start;
+          gap:10px;
+          opacity: 0;
+          transform: translateY(-8px);
+          transition: opacity .18s ease, transform .18s ease;
+        }
+        .toast.show{ opacity: 1; transform: translateY(0); }
+        .toast .toast-dot{ width:10px;height:10px;border-radius:50%;margin-top:4px;flex:0 0 10px; }
+        .toast.success{
+          background: rgba(18, 36, 22, .92);
+          border: 1px solid rgba(52, 211, 153, .35);
+          color: rgba(236, 253, 245, 0.95);
+        }
+        .toast.success .toast-dot{ background: rgba(52, 211, 153, .95); }
+        .toast.error{
+          background: rgba(40, 18, 18, .92);
+          border: 1px solid rgba(248, 113, 113, .35);
+          color: rgba(254, 242, 242, 0.95);
+        }
+        .toast.error .toast-dot{ background: rgba(248, 113, 113, .95); }
+      `;
+      document.head.appendChild(style);
+    }
+
+    if (!this.DOM.toastContainer) {
+      const container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+      this.DOM.toastContainer = container;
     }
   }
 
-  normalizeLoadedSettings(raw) {
-    if (!raw || typeof raw !== 'object') return null;
+  showToast(type, message, { timeout = 2600 } = {}) {
+    this.initToasts();
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `
+      <span class="toast-dot"></span>
+      <div class="toast-msg">${String(message)}</div>
+    `;
+    this.DOM.toastContainer.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
 
-    const out = {
-      fps: DEFAULT_FPS,
-      useOriginalViewBox: true,
-      viewBox: { minX: 0, minY: 0, width: 800, height: 600 },
-      originalViewBox: null,
-      keepCentered: true,
-      canvasBgColor: '#0a0a12',
-      transparentBg: false
-    };
-
-    if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
-
-    if (typeof raw.useOriginalViewBox === 'boolean') out.useOriginalViewBox = raw.useOriginalViewBox;
-
-    if (raw.viewBox && typeof raw.viewBox === 'object') {
-      out.viewBox = {
-        minX: Number(raw.viewBox.minX ?? 0) || 0,
-        minY: Number(raw.viewBox.minY ?? 0) || 0,
-        width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
-        height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600)
-      };
-    }
-
-    if (raw.originalViewBox && typeof raw.originalViewBox === 'object') {
-      out.originalViewBox = {
-        minX: Number(raw.originalViewBox.minX ?? 0) || 0,
-        minY: Number(raw.originalViewBox.minY ?? 0) || 0,
-        width: Math.max(1, Number(raw.originalViewBox.width ?? out.viewBox.width) || out.viewBox.width),
-        height: Math.max(1, Number(raw.originalViewBox.height ?? out.viewBox.height) || out.viewBox.height)
-      };
-    }
-
-    if (typeof raw.keepCentered === 'boolean') out.keepCentered = raw.keepCentered;
-
-    if (typeof raw.canvasBgColor === 'string' && raw.canvasBgColor.trim()) {
-      out.canvasBgColor = raw.canvasBgColor.trim();
-    }
-
-    if (typeof raw.transparentBg === 'boolean') out.transparentBg = raw.transparentBg;
-
-    return out;
+    window.setTimeout(() => {
+      el.classList.remove('show');
+      window.setTimeout(() => el.remove(), 220);
+    }, timeout);
   }
 
-  applyLoadedSettingsFromBackend(animationSettingsStr) {
-    const parsed = typeof animationSettingsStr === 'string' ? this.safeParseJson(animationSettingsStr) : null;
-    const normalized = this.normalizeLoadedSettings(parsed);
-    if (!normalized) return false;
-
-    const keepOriginalVB = this.state.settings.originalViewBox;
-    this.state.settings = {
-      ...this.state.settings,
-      ...normalized,
-      originalViewBox: keepOriginalVB
-    };
-
-    return true;
-  }
-
-  // ===== Load animation from API =====
-  async loadAnimationById(animationId) {
-    try {
-      const res = await getAnimationRequest({ animationId });
-
-      if (!res?.success || !res.animation) {
-        this.showToast('error', 'Неуспешно зареждане на анимацията.');
-        return;
-      }
-
-      const anim = res.animation;
-
-      // name
-      if (anim.name) this.DOM.projectName.value = anim.name;
-
-      // Apply settings first (so loadSVG uses correct viewBox mode)
-      if (anim.animation_settings) {
-        this.applyLoadedSettingsFromBackend(anim.animation_settings);
-      }
-
-      // load SVG first (this also rebuilds elements tree)
-      if (anim.starting_svg) {
-        this.loadSVG(anim.starting_svg);
-      } else {
-        this.showToast('error', 'Анимацията няма starting_svg.');
-        return;
-      }
-
-      // apply steps from backend segments
-      if (Array.isArray(anim.animation_segments)) {
-        this.applyLoadedAnimation(anim);
-      }
-
-      // After SVG load, ensure viewBox/background/fps reflect loaded settings
-      this.applyViewBox();
-      this.applyCanvasBackground();
-      this.updateFpsDisplay();
-      this.updateTimeline();
-
-      this.state.hasUnsavedChanges = false;
-      this.showToast('success', 'Анимацията е заредена');
-    } catch (e) {
-      console.error(e);
-      this.showToast('error', 'Грешка при зареждане на анимацията.');
-    }
-  }
-
-  extractPropertyAndToValue(animObj) {
-    if (!animObj || typeof animObj !== 'object') return { property: null, toValue: null };
-    const keys = Object.keys(animObj);
-    if (!keys.length) return { property: null, toValue: null };
-    const property = keys[0];
-    return { property, toValue: animObj[property] };
-  }
-
-  // Convert backend animation -> UI steps
-  applyLoadedAnimation(anim) {
-    const segments = Array.isArray(anim.animation_segments) ? anim.animation_segments : [];
-    const sorted = [...segments].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
-
-    const steps = [];
-    let maxStepId = 0;
-
-    for (const seg of sorted) {
-      let elementData = null;
-
-      const elementUid = Number(seg.element_id ?? seg.element_uid);
-      if (!Number.isNaN(elementUid)) {
-        elementData = this.state.elements.find((el) => el.uid === elementUid) || null;
-      }
-
-      if (!elementData && seg.element_selector) {
-        const node = this.DOM.mainCanvas.querySelector(seg.element_selector);
-        if (node) elementData = this.state.elements.find((el) => el.element === node) || null;
-      }
-
-      if (!elementData && this.state.elements.length === 1) {
-        elementData = this.state.elements[0];
-      }
-
-      if (!elementData) {
-        console.warn('[load] Segment skipped: missing element mapping', seg);
-        continue;
-      }
-
-      const animData = this.safeParseJson(seg.animation_data) || {};
-      const { property, toValue } = this.extractPropertyAndToValue(animData);
-      if (!property) continue;
-
-      const tagName = elementData.tagName;
-      const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
-      const propMeta = props.properties.find((p) => p.name === property);
-      const propertyLabel = propMeta?.label || property;
-
-      const startTime = Number(seg.start_at ?? 0) || 0;
-      const duration =
-        Number(seg.duration ?? 0) ||
-        Math.max(0, (Number(seg.end_at ?? 0) || 0) - startTime);
-
-      const stepId = Number(seg.step ?? seg.id ?? 0) || 0;
-      maxStepId = Math.max(maxStepId, stepId);
-
-      steps.push({
-        id: stepId || (steps.length + 1),
-
-        elementPath: elementData.path,
-        elementUid: elementData.uid,
-        elementTag: elementData.tagName,
-        elementId: elementData.id,
-
-        property,
-        propertyLabel,
-
-        fromValue: this.getResolvedAttributeForInput(elementData.element, property, propMeta?.type || ''),
-        toValue: String(toValue),
-
-        startTime,
-        duration: Math.max(0.05, duration),
-        easing: seg.easing || 'linear'
-      });
-    }
-
-    this.state.steps = steps;
-    this.state.stepCounter = maxStepId || steps.length;
-    this.state.currentStepIndex = steps.length ? 0 : -1;
-    this.state.editingStepIndex = null;
-
-    this.renderSteps();
-    this.updateTimeline();
-    this.updateStepNavigation();
-    this.updatePlayhead();
-  }
-
-  // ===== DOM Cache =====
+  // ===========================
+  // DOM cache
+  // ===========================
   cacheDOMElements() {
     const d = document;
 
@@ -434,84 +319,138 @@ class SvgAnimatorEditor {
     this.DOM.exportProgressText = d.getElementById('exportProgressText');
   }
 
-  // ===== Toasts =====
-  initToasts() {
-    if (!document.getElementById('toast-styles')) {
-      const style = document.createElement('style');
-      style.id = 'toast-styles';
-      style.textContent = `
-        .toast-container{
-          position: fixed;
-          top: 14px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 99999;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          pointer-events: none;
-        }
-        .toast{
-          pointer-events: auto;
-          min-width: 280px;
-          max-width: 560px;
-          padding: 10px 12px;
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(0,0,0,.35);
-          backdrop-filter: blur(8px);
-          font-size: 13px;
-          line-height: 1.35;
-          display:flex;
-          align-items:flex-start;
-          gap:10px;
-          opacity: 0;
-          transform: translateY(-8px);
-          transition: opacity .18s ease, transform .18s ease;
-        }
-        .toast.show{ opacity: 1; transform: translateY(0); }
-        .toast .toast-dot{ width:10px;height:10px;border-radius:50%;margin-top:4px;flex:0 0 10px; }
-        .toast.success{
-          background: rgba(18, 36, 22, .92);
-          border: 1px solid rgba(52, 211, 153, .35);
-          color: rgba(236, 253, 245, 0.95);
-        }
-        .toast.success .toast-dot{ background: rgba(52, 211, 153, .95); }
-        .toast.error{
-          background: rgba(40, 18, 18, .92);
-          border: 1px solid rgba(248, 113, 113, .35);
-          color: rgba(254, 242, 242, 0.95);
-        }
-        .toast.error .toast-dot{ background: rgba(248, 113, 113, .95); }
-      `;
-      document.head.appendChild(style);
-    }
+  // ===========================
+  // General helpers
+  // ===========================
+  clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
+  }
 
-    if (!this.DOM.toastContainer) {
-      const container = document.createElement('div');
-      container.className = 'toast-container';
-      document.body.appendChild(container);
-      this.DOM.toastContainer = container;
+  safeParseJson(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
     }
   }
 
-  showToast(type, message, { timeout = 2600 } = {}) {
-    this.initToasts();
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
-    el.innerHTML = `
-      <span class="toast-dot"></span>
-      <div class="toast-msg">${String(message)}</div>
-    `;
-    this.DOM.toastContainer.appendChild(el);
-    requestAnimationFrame(() => el.classList.add('show'));
-
-    window.setTimeout(() => {
-      el.classList.remove('show');
-      window.setTimeout(() => el.remove(), 220);
-    }, timeout);
+  showModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.classList.add('show');
+    modalEl.style.display = 'block';
   }
 
-  // ===== Listeners =====
+  hideModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+  }
+
+  markAsChanged() {
+    this.state.hasUnsavedChanges = true;
+  }
+
+  // ===========================
+  // Remove unsupported easings (elastic/expo/back)
+  // ===========================
+  pruneUnsupportedEasings() {
+    const select = this.DOM.animationEasing;
+    if (!select) return;
+
+    const UNSUPPORTED = new Set([
+      'elastic',
+      'expo',
+      'back',
+      'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+      'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      'cubic-bezier(0.6, 0.04, 0.98, 0.335)'
+    ]);
+
+    const options = Array.from(select.options || []);
+    let removedSelected = false;
+
+    for (const opt of options) {
+      const v = String(opt.value || '').trim();
+      if (UNSUPPORTED.has(v)) {
+        if (opt.selected) removedSelected = true;
+        opt.remove();
+      }
+    }
+
+    if (removedSelected) select.value = 'ease-in-out';
+  }
+
+  sanitizeEasing(easing) {
+    const unsupportedLegacy = new Set([
+      'elastic',
+      'expo',
+      'back',
+      'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+      'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+      'cubic-bezier(0.6, 0.04, 0.98, 0.335)'
+    ]);
+    if (!easing) return 'linear';
+    if (unsupportedLegacy.has(easing)) return 'ease-in-out';
+    return easing;
+  }
+
+  // ===========================
+  // Length units: stroke-width & font-size MUST be px
+  // ===========================
+  isLengthProp(prop) {
+    return prop === 'stroke-width' || prop === 'font-size';
+  }
+
+  parseNumberWithUnit(v) {
+    const s = String(v ?? '').trim();
+    const m = s.match(/^(-?\d+(\.\d+)?)([a-z%]*)$/i);
+    if (!m) return null;
+    return { num: parseFloat(m[1]), unit: m[3] || '' };
+  }
+
+  ensurePxIfLength(prop, value) {
+    if (!this.isLengthProp(prop)) return String(value);
+    const p = this.parseNumberWithUnit(value);
+    if (!p) return String(value);
+    return `${p.num}px`;
+  }
+
+  normalizeToValueWithFromUnit(prop, from, to) {
+    if (this.isLengthProp(prop)) {
+      const b = this.parseNumberWithUnit(to);
+      if (!b) return String(to);
+      return `${b.num}px`;
+    }
+
+    const a = this.parseNumberWithUnit(from);
+    const b = this.parseNumberWithUnit(to);
+    if (!a || !b) return String(to);
+
+    if (a.unit && !b.unit) return `${b.num}${a.unit}`;
+    return String(to);
+  }
+
+  interpolateNumberWithUnit(prop, from, to, progress) {
+    if (this.isLengthProp(prop)) {
+      const a = this.parseNumberWithUnit(from);
+      const b = this.parseNumberWithUnit(to);
+      if (!a || !b) return null;
+      const value = a.num + (b.num - a.num) * progress;
+      return `${value}px`;
+    }
+
+    const a = this.parseNumberWithUnit(from);
+    const b = this.parseNumberWithUnit(to);
+    if (!a || !b) return null;
+    if (a.unit !== b.unit) return null;
+
+    const value = a.num + (b.num - a.num) * progress;
+    return `${value}${a.unit}`;
+  }
+
+  // ===========================
+  // Event listeners
+  // ===========================
   setupEventListeners() {
     // File upload
     this.DOM.uploadSvgBtn.addEventListener('click', () => this.DOM.svgFileInput.click());
@@ -542,14 +481,12 @@ class SvgAnimatorEditor {
     this.DOM.animationType.addEventListener('change', this.handleAnimationTypeSelect);
     this.DOM.addAnimationBtn.addEventListener('click', this.addOrUpdateAnimationStep);
 
-    // Timeline scroll sync (fix: labels stay aligned on overflow-y scroll)
+    // Timeline scroll sync
     const syncScroll = (sourceEl) => {
       if (this._isSyncingTimelineScroll) return;
       this._isSyncingTimelineScroll = true;
-
       const st = sourceEl.scrollTop || 0;
       if (this.DOM.timelineLabels) this.DOM.timelineLabels.scrollTop = st;
-
       requestAnimationFrame(() => {
         this._isSyncingTimelineScroll = false;
       });
@@ -566,136 +503,153 @@ class SvgAnimatorEditor {
     }
 
     // Unsaved modal
-    this.DOM.discardBtn.addEventListener('click', () => {
-      this.hideModal(this.DOM.unsavedModal);
-      window.location.href = 'my-projects';
-    });
-    this.DOM.saveAndCloseBtn.addEventListener('click', async () => {
-      await this.handleSave();
-      this.hideModal(this.DOM.unsavedModal);
-      window.location.href = 'my-projects';
-    });
+    if (this.DOM.discardBtn) {
+      this.DOM.discardBtn.addEventListener('click', () => {
+        this.hideModal(this.DOM.unsavedModal);
+        window.location.href = 'my-projects';
+      });
+    }
+    if (this.DOM.saveAndCloseBtn) {
+      this.DOM.saveAndCloseBtn.addEventListener('click', async () => {
+        await this.handleSave();
+        this.hideModal(this.DOM.unsavedModal);
+        window.location.href = 'my-projects';
+      });
+    }
 
     // Import URL modal
-    this.DOM.importUrlBtn.addEventListener('click', () => this.showModal(this.DOM.importUrlModal));
-    this.DOM.closeUrlModal.addEventListener('click', () => this.hideModal(this.DOM.importUrlModal));
-    this.DOM.cancelUrlImport.addEventListener('click', () => this.hideModal(this.DOM.importUrlModal));
-    this.DOM.confirmUrlImport.addEventListener('click', this.handleUrlImport);
-    this.DOM.svgUrlInput.addEventListener('keydown', (e) => {
+    this.DOM.importUrlBtn?.addEventListener('click', () => this.showModal(this.DOM.importUrlModal));
+    this.DOM.closeUrlModal?.addEventListener('click', () => this.hideModal(this.DOM.importUrlModal));
+    this.DOM.cancelUrlImport?.addEventListener('click', () => this.hideModal(this.DOM.importUrlModal));
+    this.DOM.confirmUrlImport?.addEventListener('click', this.handleUrlImport);
+    this.DOM.svgUrlInput?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.handleUrlImport();
     });
 
     // Import Code modal
-    this.DOM.importCodeBtn.addEventListener('click', () => this.showModal(this.DOM.importCodeModal));
-    this.DOM.closeCodeModal.addEventListener('click', () => this.hideModal(this.DOM.importCodeModal));
-    this.DOM.cancelCodeImport.addEventListener('click', () => this.hideModal(this.DOM.importCodeModal));
-    this.DOM.confirmCodeImport.addEventListener('click', this.handleCodeImport);
+    this.DOM.importCodeBtn?.addEventListener('click', () => this.showModal(this.DOM.importCodeModal));
+    this.DOM.closeCodeModal?.addEventListener('click', () => this.hideModal(this.DOM.importCodeModal));
+    this.DOM.cancelCodeImport?.addEventListener('click', () => this.hideModal(this.DOM.importCodeModal));
+    this.DOM.confirmCodeImport?.addEventListener('click', this.handleCodeImport);
 
     // Settings modal
-    this.DOM.settingsBtn.addEventListener('click', this.openSettingsModal);
-    this.DOM.closeSettingsModal.addEventListener('click', () => this.hideModal(this.DOM.settingsModal));
-    this.DOM.applySettingsBtn.addEventListener('click', this.applySettings);
-    this.DOM.resetSettingsBtn.addEventListener('click', this.resetSettings);
+    this.DOM.settingsBtn?.addEventListener('click', this.openSettingsModal);
+    this.DOM.closeSettingsModal?.addEventListener('click', () => this.hideModal(this.DOM.settingsModal));
+    this.DOM.applySettingsBtn?.addEventListener('click', this.applySettings);
+    this.DOM.resetSettingsBtn?.addEventListener('click', this.resetSettings);
 
     // FPS options
-    this.DOM.fpsOptions.forEach((option) => {
+    this.DOM.fpsOptions?.forEach((option) => {
       option.addEventListener('click', () => {
         this.DOM.fpsOptions.forEach((o) => o.classList.remove('active'));
         option.classList.add('active');
         this.DOM.customFps.value = '';
       });
     });
-    this.DOM.customFps.addEventListener('input', () => {
+    this.DOM.customFps?.addEventListener('input', () => {
       if (this.DOM.customFps.value) {
         this.DOM.fpsOptions.forEach((o) => o.classList.remove('active'));
       }
     });
 
     // ViewBox checkbox
-    this.DOM.useOriginalViewBox.addEventListener('change', () => {
-      this.DOM.viewboxInputs.classList.toggle('disabled', this.DOM.useOriginalViewBox.checked);
+    this.DOM.useOriginalViewBox?.addEventListener('change', () => {
+      this.DOM.viewboxInputs?.classList.toggle('disabled', this.DOM.useOriginalViewBox.checked);
     });
 
     // Color pickers sync
-    this.DOM.canvasBgColor.addEventListener('input', () => {
+    this.DOM.canvasBgColor?.addEventListener('input', () => {
       this.DOM.canvasBgColorText.value = this.DOM.canvasBgColor.value;
       this.DOM.transparentBgBtn.classList.remove('active');
     });
 
-    this.DOM.canvasBgColorText.addEventListener('input', () => {
+    this.DOM.canvasBgColorText?.addEventListener('input', () => {
       if (/^#[0-9A-Fa-f]{6}$/.test(this.DOM.canvasBgColorText.value)) {
         this.DOM.canvasBgColor.value = this.DOM.canvasBgColorText.value;
       }
       this.DOM.transparentBgBtn.classList.remove('active');
     });
 
-    this.DOM.transparentBgBtn.addEventListener('click', () => {
+    this.DOM.transparentBgBtn?.addEventListener('click', () => {
       this.DOM.transparentBgBtn.classList.toggle('active');
     });
 
-    // Timeline resize handle
-    this.DOM.timelineResizeHandle.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const handle = this.DOM.timelineResizeHandle;
-      const section = this.DOM.timelineSection;
-      let isResizing = true;
-      const startY = e.clientY;
-      const startHeight = section.getBoundingClientRect().height;
+    // Timeline resize handle (optional)
+    if (this.DOM.timelineResizeHandle && this.DOM.timelineSection) {
+      this.DOM.timelineResizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const handle = this.DOM.timelineResizeHandle;
+        const section = this.DOM.timelineSection;
+        let isResizing = true;
+        const startY = e.clientY;
+        const startHeight = section.getBoundingClientRect().height;
 
-      handle.classList.add('active');
-      document.body.style.cursor = 'ns-resize';
-      document.body.style.userSelect = 'none';
+        handle.classList.add('active');
+        document.body.style.cursor = 'ns-resize';
+        document.body.style.userSelect = 'none';
 
-      const onMouseMove = (ev) => {
-        if (!isResizing) return;
-        const dy = startY - ev.clientY;
-        const newHeight = Math.max(120, Math.min(600, startHeight + dy));
-        section.style.height = `${newHeight}px`;
-      };
+        const onMouseMove = (ev) => {
+          if (!isResizing) return;
+          const dy = startY - ev.clientY;
+          const newHeight = Math.max(120, Math.min(600, startHeight + dy));
+          section.style.height = `${newHeight}px`;
+        };
 
-      const onMouseUp = () => {
-        isResizing = false;
-        handle.classList.remove('active');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-      };
+        const onMouseUp = () => {
+          isResizing = false;
+          handle.classList.remove('active');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        };
 
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    });
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
 
     // Export modal
-    this.DOM.exportBtn.addEventListener('click', () => this.showModal(this.DOM.exportModal));
-    this.DOM.closeExportModal.addEventListener('click', () => this.hideModal(this.DOM.exportModal));
-    this.DOM.exportVideoBtn.addEventListener('click', this.handleExportVideo);
-    this.DOM.exportFramesBtn.addEventListener('click', this.handleExportFrames);
+    this.DOM.exportBtn?.addEventListener('click', () => this.showModal(this.DOM.exportModal));
+    this.DOM.closeExportModal?.addEventListener('click', () => this.hideModal(this.DOM.exportModal));
+    this.DOM.exportVideoBtn?.addEventListener('click', this.handleExportVideo);
+    this.DOM.exportFramesBtn?.addEventListener('click', this.handleExportFrames);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', this.handleKeydown);
+
+    // Warn on leaving
+    window.addEventListener('beforeunload', (e) => {
+      if (!this.state.hasUnsavedChanges) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   }
 
-  // ===== Utility: lock/unlock editor while playing =====
+  // ===========================
+  // Lock/unlock editor while playing
+  // ===========================
   setEditorLocked(isLocked) {
     this.state.isEditorLocked = !!isLocked;
 
-    this.DOM.targetElement.disabled = isLocked;
-    this.DOM.animationType.disabled = isLocked || !this.DOM.targetElement.value;
-    this.DOM.animationStartTime.disabled = isLocked;
-    this.DOM.animationDuration.disabled = isLocked;
-    this.DOM.animationEasing.disabled = isLocked;
+    if (this.DOM.targetElement) this.DOM.targetElement.disabled = isLocked;
+    if (this.DOM.animationType) this.DOM.animationType.disabled = isLocked || !this.DOM.targetElement.value;
+    if (this.DOM.animationStartTime) this.DOM.animationStartTime.disabled = isLocked;
+    if (this.DOM.animationDuration) this.DOM.animationDuration.disabled = isLocked;
+    if (this.DOM.animationEasing) this.DOM.animationEasing.disabled = isLocked;
 
-    this.DOM.addAnimationBtn.disabled = isLocked || !this.DOM.animationType.value;
+    if (this.DOM.addAnimationBtn) this.DOM.addAnimationBtn.disabled = isLocked || !this.DOM.animationType.value;
 
-    this.DOM.stepsList.querySelectorAll('.step-action-btn').forEach((btn) => {
+    this.DOM.stepsList?.querySelectorAll?.('.step-action-btn')?.forEach((btn) => {
       btn.disabled = isLocked;
       btn.style.pointerEvents = isLocked ? 'none' : '';
       btn.style.opacity = isLocked ? '0.5' : '';
     });
   }
 
-  // ===== File Upload =====
+  // ===========================
+  // File Upload
+  // ===========================
   handleFileUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -714,7 +668,9 @@ class SvgAnimatorEditor {
     reader.readAsText(file);
   }
 
-  // ===== URL Import =====
+  // ===========================
+  // URL Import
+  // ===========================
   async handleUrlImport() {
     const url = this.DOM.svgUrlInput.value.trim();
 
@@ -768,7 +724,9 @@ class SvgAnimatorEditor {
     }
   }
 
-  // ===== Code Import =====
+  // ===========================
+  // Code Import
+  // ===========================
   handleCodeImport() {
     const code = this.DOM.svgCodeInput.value.trim();
 
@@ -813,7 +771,9 @@ class SvgAnimatorEditor {
     this.showToast('success', 'SVG е зареден успешно');
   }
 
-  // ===== Reset all editor state on new SVG =====
+  // ===========================
+  // Reset editor state when loading new SVG
+  // ===========================
   resetForNewSvg() {
     if (this.state.isPlaying) this.stopPlayback();
 
@@ -827,22 +787,31 @@ class SvgAnimatorEditor {
 
     this.state.selectedElement = null;
 
-    this.DOM.targetElement.innerHTML = '<option value="">Изберете елемент</option>';
-    this.DOM.targetElement.value = '';
-    this.DOM.targetElement.disabled = true;
+    this.state.stepGroups = new Map();
+    this.state.stepGroupsDirty = true;
 
-    this.DOM.animationType.innerHTML = '<option value="">Изберете анимация</option>';
-    this.DOM.animationType.value = '';
-    this.DOM.animationType.disabled = true;
+    if (this.DOM.targetElement) {
+      this.DOM.targetElement.innerHTML = '<option value="">Изберете елемент</option>';
+      this.DOM.targetElement.value = '';
+      this.DOM.targetElement.disabled = true;
+    }
 
-    this.DOM.animationValues.style.display = 'none';
-    this.DOM.valueInputs.innerHTML = '';
-    this.DOM.addAnimationBtn.disabled = true;
-    this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
+    if (this.DOM.animationType) {
+      this.DOM.animationType.innerHTML = '<option value="">Изберете анимация</option>';
+      this.DOM.animationType.value = '';
+      this.DOM.animationType.disabled = true;
+    }
 
-    this.DOM.animationStartTime.value = 0;
-    this.DOM.animationDuration.value = 1;
-    this.DOM.animationEasing.value = 'ease-in-out';
+    if (this.DOM.animationValues) this.DOM.animationValues.style.display = 'none';
+    if (this.DOM.valueInputs) this.DOM.valueInputs.innerHTML = '';
+    if (this.DOM.addAnimationBtn) {
+      this.DOM.addAnimationBtn.disabled = true;
+      this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
+    }
+
+    if (this.DOM.animationStartTime) this.DOM.animationStartTime.value = 0;
+    if (this.DOM.animationDuration) this.DOM.animationDuration.value = 1;
+    if (this.DOM.animationEasing) this.DOM.animationEasing.value = 'ease-in-out';
 
     this.renderSteps();
     this.updateTimeline();
@@ -852,7 +821,9 @@ class SvgAnimatorEditor {
     this.setEditorLocked(false);
   }
 
-  // ===== Load SVG =====
+  // ===========================
+  // Load SVG into canvas
+  // ===========================
   loadSVG(svgString) {
     this.resetForNewSvg();
 
@@ -881,8 +852,6 @@ class SvgAnimatorEditor {
         if (this.state.settings.useOriginalViewBox) {
           this.state.settings.viewBox = { ...this.state.settings.originalViewBox };
         } else {
-          // If loaded settings have custom viewBox, keep it as-is.
-          // If missing/invalid, fallback to original.
           const vb = this.state.settings.viewBox || null;
           if (!vb || !Number.isFinite(vb.width) || !Number.isFinite(vb.height)) {
             this.state.settings.viewBox = { ...this.state.settings.originalViewBox };
@@ -902,7 +871,7 @@ class SvgAnimatorEditor {
     this.applyViewBox();
     this.applyCanvasBackground();
 
-    this.DOM.canvasPlaceholder.style.display = 'none';
+    if (this.DOM.canvasPlaceholder) this.DOM.canvasPlaceholder.style.display = 'none';
     this.DOM.mainCanvas.style.display = 'block';
 
     this.buildElementsTree();
@@ -914,7 +883,9 @@ class SvgAnimatorEditor {
     this.showToast('success', 'SVG е зареден');
   }
 
-  // ===== Elements Tree =====
+  // ===========================
+  // Elements tree
+  // ===========================
   buildElementsTree() {
     this.state.elements = [];
     this.state.elementCounter = 0;
@@ -954,7 +925,6 @@ class SvgAnimatorEditor {
     const hasChildren = element.children && element.children.length > 0;
 
     const animatable = isAnimatableNode(element);
-
     let html = '';
 
     if (animatable) {
@@ -1033,13 +1003,11 @@ class SvgAnimatorEditor {
     }
   }
 
-  // Dynamic outline thickness: MUCH thicker + scales with canvas size
   getDynamicHighlightPx() {
     const container = this.DOM.canvasContainer;
     const rect = container?.getBoundingClientRect?.();
     const minDim = rect ? Math.min(rect.width, rect.height) : 800;
 
-    // 1.6% of min dimension, clamped (very visible)
     const w = Math.max(6, Math.min(32, Math.round(minDim * 0.016)));
     const off = Math.max(6, Math.min(42, Math.round(w * 1.05)));
     return { w, off };
@@ -1053,7 +1021,6 @@ class SvgAnimatorEditor {
 
     if (isHovering) {
       element.classList.add('svg-element-highlight');
-
       const { w, off } = this.getDynamicHighlightPx();
       element.style.setProperty('--svg-highlight-w', `${w}px`);
       element.style.setProperty('--svg-highlight-off', `${off}px`);
@@ -1081,7 +1048,9 @@ class SvgAnimatorEditor {
     });
   }
 
-  // ===== Add Animation Panel =====
+  // ===========================
+  // Add Animation Panel
+  // ===========================
   enableAddPanel() {
     this.DOM.targetElement.disabled = false;
     this.DOM.animationStartTime.disabled = false;
@@ -1124,11 +1093,9 @@ class SvgAnimatorEditor {
     this.DOM.animationEasing.disabled = this.state.isPlaying;
   }
 
-  // --- Color helpers
-  clamp(n, a, b) {
-    return Math.max(a, Math.min(b, n));
-  }
-
+  // ===========================
+  // Color helpers
+  // ===========================
   rgbToHex(r, g, b) {
     const rr = this.clamp(Math.round(r), 0, 255).toString(16).padStart(2, '0');
     const gg = this.clamp(Math.round(g), 0, 255).toString(16).padStart(2, '0');
@@ -1197,6 +1164,7 @@ class SvgAnimatorEditor {
       if (!currentValue) currentValue = '#000000';
     }
 
+    currentValue = this.ensurePxIfLength(attrName, currentValue);
     return currentValue;
   }
 
@@ -1277,6 +1245,10 @@ class SvgAnimatorEditor {
     } else {
       const inputType = prop.type === 'range' ? 'number' : prop.type;
 
+      // If it's a length prop, show number only in input (no px), but store px internally
+      const parsedLen = this.isLengthProp(propName) ? this.parseNumberWithUnit(currentValue) : null;
+      const displayFrom = (this.isLengthProp(propName) && parsedLen) ? String(parsedLen.num) : currentValue;
+
       const fromRow = document.createElement('div');
       fromRow.className = 'value-input-row';
       fromRow.innerHTML = `
@@ -1284,7 +1256,7 @@ class SvgAnimatorEditor {
         <input
           type="${inputType}"
           id="valueFrom"
-          value="${currentValue}"
+          value="${displayFrom}"
           disabled
           ${prop.min !== undefined ? `min="${prop.min}"` : ''}
           ${prop.max !== undefined ? `max="${prop.max}"` : ''}
@@ -1332,12 +1304,16 @@ class SvgAnimatorEditor {
     const prop = props.properties.find((p) => p.name === propName);
     const propType = prop?.type || '';
 
-    const resolvedFrom = this.getResolvedAttributeForInput(this.state.selectedElement.element, propName, propType);
+    let resolvedFrom = this.getResolvedAttributeForInput(this.state.selectedElement.element, propName, propType);
+    resolvedFrom = this.ensurePxIfLength(propName, resolvedFrom);
 
     if (!String(toInput.value || '').trim()) {
       this.showToast('error', 'Моля, въведете стойност за "До".');
       return;
     }
+
+    const rawTo = toInput.value;
+    const normalizedTo = this.normalizeToValueWithFromUnit(propName, resolvedFrom, rawTo);
 
     let startTime = parseFloat(this.DOM.animationStartTime.value) || 0;
     let duration = parseFloat(this.DOM.animationDuration.value) || 1;
@@ -1345,19 +1321,25 @@ class SvgAnimatorEditor {
     duration = this.clamp(duration, 0.05, MAX_SECONDS);
     startTime = this.clamp(startTime, 0, Math.max(0, MAX_SECONDS - duration));
 
+    const easing = this.sanitizeEasing(this.DOM.animationEasing.value);
+
     const stepObj = {
       id: 0,
+
       elementPath: this.state.selectedElement.path,
       elementUid: this.state.selectedElement.uid,
       elementTag: this.state.selectedElement.tagName,
       elementId: this.state.selectedElement.id,
+
       property: propName,
       propertyLabel: this.DOM.animationType.options[this.DOM.animationType.selectedIndex].text,
+
       fromValue: resolvedFrom,
-      toValue: toInput.value,
+      toValue: normalizedTo,
+
       startTime,
       duration,
-      easing: this.DOM.animationEasing.value
+      easing
     };
 
     if (this.state.editingStepIndex !== null && this.state.editingStepIndex >= 0) {
@@ -1382,6 +1364,8 @@ class SvgAnimatorEditor {
       this.showToast('success', 'Стъпката е добавена');
     }
 
+    this.state.stepGroupsDirty = true;
+
     this.markAsChanged();
     this.renderSteps();
     this.updateTimeline();
@@ -1393,7 +1377,9 @@ class SvgAnimatorEditor {
     this.DOM.addAnimationBtn.disabled = true;
   }
 
-  // ===== Steps =====
+  // ===========================
+  // Steps table
+  // ===========================
   renderSteps() {
     if (this.state.steps.length === 0) {
       this.DOM.stepsList.innerHTML = `
@@ -1483,6 +1469,8 @@ class SvgAnimatorEditor {
       this.DOM.addAnimationBtn.textContent = 'Добави стъпка';
     }
 
+    this.state.stepGroupsDirty = true;
+
     this.markAsChanged();
     this.renderSteps();
     this.updateTimeline();
@@ -1514,7 +1502,14 @@ class SvgAnimatorEditor {
 
       setTimeout(() => {
         const toInput = document.getElementById('valueTo');
-        if (toInput) toInput.value = step.toValue;
+        if (toInput) {
+          if (toInput.type === 'number') {
+            const parsed = this.parseNumberWithUnit(step.toValue);
+            toInput.value = parsed ? String(parsed.num) : step.toValue;
+          } else {
+            toInput.value = step.toValue;
+          }
+        }
 
         this.DOM.addAnimationBtn.disabled = false;
         this.DOM.addAnimationBtn.textContent = 'Запази промени';
@@ -1542,9 +1537,10 @@ class SvgAnimatorEditor {
     this.DOM.nextStep.disabled = this.state.currentStepIndex >= total - 1;
   }
 
-  // ===== Timeline =====
+  // ===========================
+  // Timeline
+  // ===========================
   generateTimelineRuler() {
-    // Build with a left sticky spacer so seconds never overlap #1/#2 labels when scrolling
     const spacer = `<div class="ruler-spacer"></div>`;
     let marks = '';
     for (let i = 0; i <= MAX_SECONDS; i++) {
@@ -1562,7 +1558,6 @@ class SvgAnimatorEditor {
     this.state.totalFrames = Math.ceil(totalDuration * this.state.settings.fps) || 0;
     this.DOM.totalTime.textContent = this.formatTime(totalDuration);
 
-    // Ensure timeline width covers 0..60s inclusive (61 slots)
     const trackWidth = (MAX_SECONDS + 1) * PX_PER_SECOND;
     if (this.DOM.timelineTracks) this.DOM.timelineTracks.style.minWidth = `${trackWidth}px`;
     if (this.DOM.timelineRuler) this.DOM.timelineRuler.style.minWidth = `${trackWidth + 120}px`;
@@ -1598,7 +1593,6 @@ class SvgAnimatorEditor {
     this.DOM.timelineLabels.innerHTML = labelsHTML;
     this.DOM.timelineTracks.innerHTML = tracksHTML;
 
-    // Ensure vertical scrolling works when many steps
     const rowCount = Math.max(1, this.state.steps.length);
     const rowsHeight = rowCount * 32;
     this.DOM.timelineTracks.style.height = `${rowsHeight}px`;
@@ -1609,6 +1603,7 @@ class SvgAnimatorEditor {
       block.addEventListener('pointerdown', this.onTimelinePointerDown);
     });
 
+    this.state.stepGroupsDirty = true;
     this.updatePlayhead();
   }
 
@@ -1626,10 +1621,8 @@ class SvgAnimatorEditor {
     this.state.drag.stepIndex = stepIndex;
     this.state.drag.startPointerX = e.clientX;
 
-    // store scrollLeft at drag start
     this.state.drag.startScrollLeft = this.DOM.timelineWrapper.scrollLeft;
 
-    // FIX: do NOT add scrollLeft here (it breaks when already scrolled)
     const rect = block.getBoundingClientRect();
     const parentRect = this.DOM.timelineTracks.getBoundingClientRect();
     const currentLeft = rect.left - parentRect.left;
@@ -1661,10 +1654,9 @@ class SvgAnimatorEditor {
     step.startTime = Math.round(this.clamp(newStartTime, 0, MAX_SECONDS) * 10) / 10;
 
     const block = this.DOM.timelineTracks.querySelector(`.frame-block[data-step="${idx}"]`);
-    if (block) {
-      block.style.left = `${step.startTime * PX_PER_SECOND}px`;
-    }
+    if (block) block.style.left = `${step.startTime * PX_PER_SECOND}px`;
 
+    this.state.stepGroupsDirty = true;
     this.renderSteps();
   }
 
@@ -1681,6 +1673,8 @@ class SvgAnimatorEditor {
     document.removeEventListener('pointermove', this.onTimelinePointerMove);
     document.removeEventListener('pointerup', this.onTimelinePointerUp);
 
+    this.state.stepGroupsDirty = true;
+
     this.markAsChanged();
     this.updateTimeline();
     this.renderSteps();
@@ -1693,20 +1687,18 @@ class SvgAnimatorEditor {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // ===== Playback =====
+  // ===========================
+  // Playback
+  // ===========================
   togglePlayback() {
-    if (this.state.isPlaying) {
-      this.stopPlayback();
-    } else {
-      this.startPlayback();
-    }
+    if (this.state.isPlaying) this.stopPlayback();
+    else this.startPlayback();
   }
 
   startPlayback() {
     if (this.state.steps.length === 0) return;
 
     this.setEditorLocked(true);
-
     this.state.isPlaying = true;
     this.DOM.playPause.classList.add('playing');
 
@@ -1715,39 +1707,35 @@ class SvgAnimatorEditor {
       return endTime > max ? endTime : max;
     }, 0);
 
-    this.state.totalFrames = Math.ceil(totalDuration * this.state.settings.fps) || 1;
+    const safeTotal = Math.max(0.0001, totalDuration);
+    const fps = this.state.settings.fps;
+    this.state.totalFrames = Math.max(1, Math.ceil(safeTotal * fps));
 
-    const frameDuration = 1000 / this.state.settings.fps;
-    let startTime = performance.now() - this.state.currentFrame * frameDuration;
+    const startPerf = performance.now();
 
-    const animate = (currentTime) => {
+    const animate = (now) => {
       if (!this.state.isPlaying) return;
 
-      const elapsedMs = currentTime - startTime;
-      this.state.currentFrame = Math.floor(elapsedMs / frameDuration);
+      const elapsed = (now - startPerf) / 1000;
+      const t = elapsed % safeTotal;
 
-      if (this.state.currentFrame >= this.state.totalFrames) {
-        this.state.currentFrame = 0;
-        startTime = currentTime;
-      }
-
-      const t = this.state.currentFrame / this.state.settings.fps;
-      this.updatePlayhead();
+      this.state.currentFrame = Math.round(t * fps);
+      this.updatePlayheadFromTime(t);
       this.applyAnimations(t);
 
-      this.state.animationId = requestAnimationFrame(animate);
+      this.state.rafId = requestAnimationFrame(animate);
     };
 
-    this.state.animationId = requestAnimationFrame(animate);
+    this.state.rafId = requestAnimationFrame(animate);
   }
 
   stopPlayback() {
     this.state.isPlaying = false;
     this.DOM.playPause.classList.remove('playing');
 
-    if (this.state.animationId) {
-      cancelAnimationFrame(this.state.animationId);
-      this.state.animationId = null;
+    if (this.state.rafId) {
+      cancelAnimationFrame(this.state.rafId);
+      this.state.rafId = null;
     }
 
     this.setEditorLocked(false);
@@ -1763,62 +1751,77 @@ class SvgAnimatorEditor {
     this.applyAnimations(time);
   }
 
-  updatePlayhead() {
-    const time = this.state.settings.fps ? this.state.currentFrame / this.state.settings.fps : 0;
+  updatePlayheadFromTime(time) {
     const position = time * PX_PER_SECOND;
-
     this.DOM.playhead.style.left = `${position}px`;
     this.DOM.currentTime.textContent = this.formatTime(time);
   }
 
-  // ===== Smooth interpolation helpers =====
-  parseNumberWithUnit(v) {
-    const s = String(v ?? '').trim();
-    const m = s.match(/^(-?\d+(\.\d+)?)([a-z%]*)$/i);
-    if (!m) return null;
-    return { num: parseFloat(m[1]), unit: m[3] || '' };
+  updatePlayhead() {
+    const time = this.state.settings.fps ? this.state.currentFrame / this.state.settings.fps : 0;
+    this.updatePlayheadFromTime(time);
   }
 
-  interpolateNumberWithUnit(from, to, progress) {
-    const a = this.parseNumberWithUnit(from);
-    const b = this.parseNumberWithUnit(to);
-    if (!a || !b) return null;
-    if (a.unit !== b.unit) return null;
-    const value = a.num + (b.num - a.num) * progress;
-    return `${value}${a.unit}`;
+  // ===========================
+  // Group steps: key = elementPath||property
+  // ===========================
+  rebuildStepGroupsIfNeeded() {
+    if (!this.state.stepGroupsDirty) return;
+
+    const groups = new Map();
+    for (const step of this.state.steps) {
+      const key = `${step.elementPath}||${step.property}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(step);
+    }
+
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => (a.startTime - b.startTime) || (a.id - b.id));
+    }
+
+    this.state.stepGroups = groups;
+    this.state.stepGroupsDirty = false;
   }
 
   applyAnimations(currentTime) {
     if (this.state.steps.length === 0) return;
 
-    for (const step of this.state.steps) {
-      const stepStart = step.startTime;
-      const stepEnd = stepStart + step.duration;
+    this.rebuildStepGroupsIfNeeded();
 
-      const elementData = this.state.elements.find((el) => el.path === step.elementPath);
+    for (const [key, groupSteps] of this.state.stepGroups.entries()) {
+      const [elementPath, property] = key.split('||');
+
+      const elementData = this.state.elements.find((el) => el.path === elementPath);
       if (!elementData) continue;
 
+      // find latest step that started
+      let prev = null;
+      for (const st of groupSteps) {
+        if (currentTime < st.startTime) break;
+        prev = st;
+      }
+
+      if (!prev) {
+        const first = groupSteps[0];
+        elementData.element.setAttribute(property, first.fromValue);
+        continue;
+      }
+
+      const stepStart = prev.startTime;
+      const stepEnd = stepStart + prev.duration;
+
       if (currentTime >= stepStart && currentTime < stepEnd) {
-        const progress = (currentTime - stepStart) / step.duration;
-        const eased = this.applyEasing(progress, step.easing);
-
-        const tagName = elementData.tagName;
-        const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
-        const meta = props.properties.find((p) => p.name === step.property);
-        const propType = meta?.type || '';
-
-        const liveFrom = this.getResolvedAttributeForInput(elementData.element, step.property, propType) || step.fromValue;
-        this.interpolateValue(elementData.element, step.property, liveFrom, step.toValue, eased);
-      } else if (currentTime >= stepEnd) {
-        elementData.element.setAttribute(step.property, step.toValue);
+        const progress = (currentTime - stepStart) / prev.duration;
+        const eased = this.applyEasing(progress, prev.easing);
+        this.interpolateValue(elementData.element, property, prev.fromValue, prev.toValue, eased);
       } else {
-        elementData.element.setAttribute(step.property, step.fromValue);
+        elementData.element.setAttribute(property, prev.toValue);
       }
     }
   }
 
   interpolateValue(element, property, from, to, progress) {
-    const numWithUnit = this.interpolateNumberWithUnit(from, to, progress);
+    const numWithUnit = this.interpolateNumberWithUnit(property, from, to, progress);
     if (numWithUnit !== null) {
       element.setAttribute(property, numWithUnit);
       return;
@@ -1831,7 +1834,8 @@ class SvgAnimatorEditor {
 
     if (fromIsNum && toIsNum) {
       const value = fromNum + (toNum - fromNum) * progress;
-      element.setAttribute(property, value);
+      if (this.isLengthProp(property)) element.setAttribute(property, `${value}px`);
+      else element.setAttribute(property, value);
       return;
     }
 
@@ -1862,44 +1866,101 @@ class SvgAnimatorEditor {
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
+  // ===========================
+  // Proper CSS-like easings via cubic-bezier
+  // ===========================
+  cubicBezier(p1x, p1y, p2x, p2y) {
+    const cx = 3 * p1x;
+    const bx = 3 * (p2x - p1x) - cx;
+    const ax = 1 - cx - bx;
+
+    const cy = 3 * p1y;
+    const by = 3 * (p2y - p1y) - cy;
+    const ay = 1 - cy - by;
+
+    const sampleCurveX = (t) => ((ax * t + bx) * t + cx) * t;
+    const sampleCurveY = (t) => ((ay * t + by) * t + cy) * t;
+    const sampleCurveDerivativeX = (t) => (3 * ax * t + 2 * bx) * t + cx;
+
+    const solveCurveX = (x) => {
+      let t2 = x;
+
+      // Newton-Raphson
+      for (let i = 0; i < 8; i++) {
+        const x2 = sampleCurveX(t2) - x;
+        const d2 = sampleCurveDerivativeX(t2);
+        if (Math.abs(x2) < 1e-7) return t2;
+        if (Math.abs(d2) < 1e-7) break;
+        t2 = t2 - x2 / d2;
+      }
+
+      // fallback binary subdivision
+      let t0 = 0;
+      let t1 = 1;
+      t2 = x;
+
+      while (t0 < t1) {
+        const x2 = sampleCurveX(t2);
+        if (Math.abs(x2 - x) < 1e-7) return t2;
+        if (x > x2) t0 = t2;
+        else t1 = t2;
+        t2 = (t1 + t0) / 2;
+      }
+
+      return t2;
+    };
+
+    return (x) => {
+      const t = solveCurveX(x);
+      return sampleCurveY(t);
+    };
+  }
+
   applyEasing(t, easing) {
-    switch (easing) {
+    const x = Math.max(0, Math.min(1, t));
+    const e = this.sanitizeEasing(easing);
+
+    switch (e) {
       case 'linear':
-        return t;
-      case 'ease':
-      case 'ease-in-out':
-        return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-      case 'ease-in':
-        return t * t;
-      case 'ease-out':
-        return 1 - (1 - t) * (1 - t);
-      case 'cubic-bezier(0.68, -0.55, 0.265, 1.55)':
-        return t < 0.5
-          ? (Math.pow(2, 20 * t - 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2
-          : (2 - Math.pow(2, -20 * t + 10) * Math.sin((20 * t - 11.125) * (2 * Math.PI) / 4.5)) / 2;
-      case 'cubic-bezier(0.175, 0.885, 0.32, 1.275)':
-        {
-          const c1 = 1.70158;
-          const c3 = c1 + 1;
-          return t < 0.5
-            ? (Math.pow(2 * t, 2) * ((c3 + 1) * 2 * t - c3)) / 2
-            : (Math.pow(2 * t - 2, 2) * ((c3 + 1) * (t * 2 - 2) + c3) + 2) / 2;
-        }
-      case 'cubic-bezier(0.6, 0.04, 0.98, 0.335)':
-        return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
+        return x;
+
+      case 'ease': {
+        const f = this.cubicBezier(0.25, 0.1, 0.25, 1.0);
+        return f(x);
+      }
+
+      case 'ease-in': {
+        const f = this.cubicBezier(0.42, 0.0, 1.0, 1.0);
+        return f(x);
+      }
+
+      case 'ease-out': {
+        const f = this.cubicBezier(0.0, 0.0, 0.58, 1.0);
+        return f(x);
+      }
+
+      case 'ease-in-out': {
+        const f = this.cubicBezier(0.42, 0.0, 0.58, 1.0);
+        return f(x);
+      }
+
       default:
-        return t;
+        return x;
     }
   }
 
-  // ===== Zoom =====
+  // ===========================
+  // Zoom
+  // ===========================
   setZoom(value) {
     this.state.zoom = Math.max(25, Math.min(200, value));
     this.DOM.zoomLevel.textContent = `${this.state.zoom}%`;
     this.DOM.mainCanvas.style.transform = `scale(${this.state.zoom / 100})`;
   }
 
-  // ===== Settings =====
+  // ===========================
+  // Settings
+  // ===========================
   openSettingsModal() {
     this.populateSettingsModal();
     this.showModal(this.DOM.settingsModal);
@@ -2004,6 +2065,18 @@ class SvgAnimatorEditor {
     this.showToast('success', 'Настройките са върнати');
   }
 
+  centerSvgContent(oldVB, newVB) {
+    if (!oldVB || !newVB) return;
+    const oldCx = oldVB.minX + oldVB.width / 2;
+    const oldCy = oldVB.minY + oldVB.height / 2;
+
+    const newMinX = oldCx - newVB.width / 2;
+    const newMinY = oldCy - newVB.height / 2;
+
+    newVB.minX = newMinX;
+    newVB.minY = newMinY;
+  }
+
   applyViewBox() {
     if (!this.DOM.mainCanvas || this.DOM.mainCanvas.style.display === 'none') return;
     const { minX, minY, width, height } = this.state.settings.viewBox;
@@ -2012,6 +2085,7 @@ class SvgAnimatorEditor {
 
   applyCanvasBackground() {
     const container = this.DOM.canvasContainer;
+    if (!container) return;
 
     if (this.state.settings.transparentBg) {
       container.style.background = `
@@ -2029,429 +2103,408 @@ class SvgAnimatorEditor {
     }
   }
 
-  centerSvgContent(oldViewBox, newViewBox) {
-    const offsetX = (newViewBox.width - oldViewBox.width) / 2;
-    const offsetY = (newViewBox.height - oldViewBox.height) / 2;
+  // ===========================
+  // Keyboard
+  // ===========================
+  handleKeydown(e) {
+    // Space toggles play/pause
+    if (e.code === 'Space') {
+      // avoid messing with typing
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
 
-    this.state.elements.forEach(({ element }) => {
-      if (!element) return;
+      e.preventDefault();
+      this.togglePlayback();
+      return;
+    }
 
-      const tagName = element.tagName.toLowerCase();
+    // Left/Right arrows seek frames (when not typing)
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
 
-      switch (tagName) {
-        case 'rect':
-        case 'text':
-        case 'image':
-          this.adjustAttribute(element, 'x', offsetX);
-          this.adjustAttribute(element, 'y', offsetY);
-          break;
-        case 'circle':
-        case 'ellipse':
-          this.adjustAttribute(element, 'cx', offsetX);
-          this.adjustAttribute(element, 'cy', offsetY);
-          break;
-        case 'line':
-          this.adjustAttribute(element, 'x1', offsetX);
-          this.adjustAttribute(element, 'y1', offsetY);
-          this.adjustAttribute(element, 'x2', offsetX);
-          this.adjustAttribute(element, 'y2', offsetY);
-          break;
-        case 'path':
-        case 'polygon':
-        case 'polyline':
-        case 'g':
-          this.adjustTransform(element, offsetX, offsetY);
-          break;
-      }
-    });
-  }
-
-  adjustAttribute(element, attr, offset) {
-    const current = parseFloat(element.getAttribute(attr)) || 0;
-    element.setAttribute(attr, current + offset);
-  }
-
-  adjustTransform(element, offsetX, offsetY) {
-    const currentTransform = element.getAttribute('transform') || '';
-    const newTranslate = `translate(${offsetX}, ${offsetY})`;
-
-    if (currentTransform) {
-      element.setAttribute('transform', `${newTranslate} ${currentTransform}`);
-    } else {
-      element.setAttribute('transform', newTranslate);
+      e.preventDefault();
+      const delta = e.code === 'ArrowLeft' ? -1 : 1;
+      this.seekToFrame(this.state.currentFrame + delta);
+      return;
     }
   }
 
-  // ===== Save / Close =====
-  markAsChanged() {
-    this.state.hasUnsavedChanges = true;
+  // ===========================
+  // Timeline utilities
+  // ===========================
+  updatePlayheadFromSeconds(seconds) {
+    this.updatePlayheadFromTime(seconds);
   }
 
-  buildCreateSettingsPayload() {
-    const s = this.state.settings;
-    return {
-      fps: s.fps,
-      viewbox: {
-        original: !!s.useOriginalViewBox,
-        minX: s.viewBox.minX,
-        minY: s.viewBox.minY,
-        width: s.viewBox.width,
-        height: s.viewBox.height
-      },
-      "center-positioning": !!s.keepCentered,
-      "canvas-background": s.transparentBg ? "transparent" : s.canvasBgColor
+  // ===========================
+  // Export (placeholder safe)
+  // ===========================
+  async handleExportVideo() {
+    this.showToast('error', 'Export Video не е имплементиран в този файл (ако имаш отделен exporter модул, кажи и ще го вържа).');
+  }
+
+  async handleExportFrames() {
+    this.showToast('error', 'Export Frames не е имплементиран в този файл (ако имаш отделен exporter модул, кажи и ще го вържа).');
+  }
+
+  // ===========================
+  // Save / Load from backend
+  // ===========================
+  normalizeLoadedSettings(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    const out = {
+      fps: DEFAULT_FPS,
+      useOriginalViewBox: true,
+      viewBox: { minX: 0, minY: 0, width: 800, height: 600 },
+      originalViewBox: null,
+      keepCentered: true,
+      canvasBgColor: '#0a0a12',
+      transparentBg: false
     };
+
+    if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
+    if (typeof raw.useOriginalViewBox === 'boolean') out.useOriginalViewBox = raw.useOriginalViewBox;
+
+    if (raw.viewBox && typeof raw.viewBox === 'object') {
+      out.viewBox = {
+        minX: Number(raw.viewBox.minX ?? 0) || 0,
+        minY: Number(raw.viewBox.minY ?? 0) || 0,
+        width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
+        height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600)
+      };
+    }
+
+    if (raw.originalViewBox && typeof raw.originalViewBox === 'object') {
+      out.originalViewBox = {
+        minX: Number(raw.originalViewBox.minX ?? 0) || 0,
+        minY: Number(raw.originalViewBox.minY ?? 0) || 0,
+        width: Math.max(1, Number(raw.originalViewBox.width ?? out.viewBox.width) || out.viewBox.width),
+        height: Math.max(1, Number(raw.originalViewBox.height ?? out.viewBox.height) || out.viewBox.height)
+      };
+    }
+
+    if (typeof raw.keepCentered === 'boolean') out.keepCentered = raw.keepCentered;
+
+    if (typeof raw.canvasBgColor === 'string' && raw.canvasBgColor.trim()) {
+      out.canvasBgColor = raw.canvasBgColor.trim();
+    }
+
+    if (typeof raw.transparentBg === 'boolean') out.transparentBg = raw.transparentBg;
+
+    return out;
   }
 
-  buildSaveSegmentsPayload() {
-    return this.state.steps.map((step, idx) => {
-      const animObj = { [step.property]: step.toValue };
-      const start = Number(step.startTime) || 0;
-      const dur = Number(step.duration) || 0;
+  applyLoadedSettingsFromBackend(animationSettingsStr) {
+    const parsed = typeof animationSettingsStr === 'string' ? this.safeParseJson(animationSettingsStr) : null;
+    const normalized = this.normalizeLoadedSettings(parsed);
+    if (!normalized) return false;
+
+    const keepOriginalVB = this.state.settings.originalViewBox;
+    this.state.settings = {
+      ...this.state.settings,
+      ...normalized,
+      originalViewBox: keepOriginalVB
+    };
+
+    return true;
+  }
+
+  async loadAnimationById(animationId) {
+    try {
+      const res = await getAnimationRequest({ animationId });
+
+      if (!res?.success || !res.animation) {
+        this.showToast('error', 'Неуспешно зареждане на анимацията.');
+        return;
+      }
+
+      const anim = res.animation;
+
+      if (anim.name) this.DOM.projectName.value = anim.name;
+
+      if (anim.animation_settings) {
+        this.applyLoadedSettingsFromBackend(anim.animation_settings);
+      }
+
+      if (anim.starting_svg) {
+        this.loadSVG(anim.starting_svg);
+      } else {
+        this.showToast('error', 'Анимацията няма starting_svg.');
+        return;
+      }
+
+      if (Array.isArray(anim.animation_segments)) {
+        this.applyLoadedAnimation(anim);
+      }
+
+      this.applyViewBox();
+      this.applyCanvasBackground();
+      this.updateFpsDisplay();
+      this.updateTimeline();
+
+      this.state.hasUnsavedChanges = false;
+      this.showToast('success', 'Анимацията е заредена');
+    } catch (e) {
+      console.error(e);
+      this.showToast('error', 'Грешка при зареждане на анимацията.');
+    }
+  }
+
+  extractPropertyAndToValue(animObj) {
+    if (!animObj || typeof animObj !== 'object') return { property: null, toValue: null };
+    const keys = Object.keys(animObj);
+    if (!keys.length) return { property: null, toValue: null };
+    const property = keys[0];
+    return { property, toValue: animObj[property] };
+  }
+
+  applyLoadedAnimation(anim) {
+    const segments = Array.isArray(anim.animation_segments) ? anim.animation_segments : [];
+    const sorted = [...segments].sort((a, b) => (a.step ?? 0) - (b.step ?? 0));
+
+    const steps = [];
+    let maxStepId = 0;
+
+    for (const seg of sorted) {
+      let elementData = null;
+
+      const elementUid = Number(seg.element_id ?? seg.element_uid);
+      if (!Number.isNaN(elementUid)) {
+        elementData = this.state.elements.find((el) => el.uid === elementUid) || null;
+      }
+
+      if (!elementData && seg.element_selector) {
+        const node = this.DOM.mainCanvas.querySelector(seg.element_selector);
+        if (node) elementData = this.state.elements.find((el) => el.element === node) || null;
+      }
+
+      if (!elementData && this.state.elements.length === 1) {
+        elementData = this.state.elements[0];
+      }
+
+      if (!elementData) {
+        console.warn('[load] Segment skipped: missing element mapping', seg);
+        continue;
+      }
+
+      const animData = this.safeParseJson(seg.animation_data) || {};
+      const { property, toValue } = this.extractPropertyAndToValue(animData);
+      if (!property) continue;
+
+      const tagName = elementData.tagName;
+      const props = ANIMATION_PROPERTIES[tagName] || ANIMATION_PROPERTIES.default;
+      const propMeta = props.properties.find((p) => p.name === property);
+      const propertyLabel = propMeta?.label || property;
+
+      const startTime = Number(seg.start_at ?? 0) || 0;
+      const duration =
+        Number(seg.duration ?? 0) ||
+        Math.max(0, (Number(seg.end_at ?? 0) || 0) - startTime);
+
+      const stepId = Number(seg.step ?? seg.id ?? 0) || 0;
+      maxStepId = Math.max(maxStepId, stepId);
+
+      let fromResolved = this.getResolvedAttributeForInput(elementData.element, property, propMeta?.type || '');
+      fromResolved = this.ensurePxIfLength(property, fromResolved);
+
+      const rawTo = String(toValue);
+      const normalizedTo = this.normalizeToValueWithFromUnit(property, fromResolved, rawTo);
+
+      const easing = this.sanitizeEasing(seg.easing || 'linear');
+
+      steps.push({
+        id: stepId || (steps.length + 1),
+
+        elementPath: elementData.path,
+        elementUid: elementData.uid,
+        elementTag: elementData.tagName,
+        elementId: elementData.id,
+
+        property,
+        propertyLabel,
+
+        fromValue: fromResolved,
+        toValue: normalizedTo,
+
+        startTime,
+        duration: Math.max(0.05, duration),
+        easing
+      });
+    }
+
+    this.state.steps = steps;
+    this.state.stepCounter = maxStepId || steps.length;
+    this.state.currentStepIndex = steps.length ? 0 : -1;
+    this.state.editingStepIndex = null;
+
+    this.state.stepGroupsDirty = true;
+
+    this.renderSteps();
+    this.updateTimeline();
+    this.updateStepNavigation();
+    this.updatePlayhead();
+  }
+
+  buildStartingSvgString() {
+    // serialize current <svg> (mainCanvas) as string
+    const svg = this.DOM.mainCanvas;
+    if (!svg) return '';
+    return svg.outerHTML;
+  }
+
+  buildSegmentsPayload() {
+    // Convert UI steps to backend segments
+    return this.state.steps.map((s) => {
+      const toValue = this.isLengthProp(s.property) ? this.ensurePxIfLength(s.property, s.toValue) : s.toValue;
 
       return {
-        step: step.id ?? (idx + 1),
-        element_id: step.elementUid ?? null,
-        animation_data: JSON.stringify(animObj),
-        easing: step.easing || 'linear',
-        duration: dur,
-        start_at: start,
-        end_at: start + dur
+        step: s.id,
+        element_id: s.elementUid, // using uid as element_id (matches your current mapping)
+        element_selector: null,
+        start_at: s.startTime,
+        duration: s.duration,
+        easing: this.sanitizeEasing(s.easing),
+        animation_data: JSON.stringify({ [s.property]: toValue })
       };
     });
   }
 
   async handleSave() {
     try {
-      const svgText = this.DOM.mainCanvas?.outerHTML || '';
-      if (!svgText || this.DOM.mainCanvas.style.display === 'none') {
-        this.showToast('error', 'Няма зареден SVG за запазване.');
+      const name = (this.DOM.projectName?.value || '').trim() || 'Untitled animation';
+      const startingSvg = this.buildStartingSvgString();
+
+      const animationSettings = JSON.stringify({
+        fps: this.state.settings.fps,
+        useOriginalViewBox: this.state.settings.useOriginalViewBox,
+        viewBox: this.state.settings.viewBox,
+        keepCentered: this.state.settings.keepCentered,
+        canvasBgColor: this.state.settings.canvasBgColor,
+        transparentBg: this.state.settings.transparentBg
+      });
+
+      const segments = this.buildSegmentsPayload();
+
+      if (!startingSvg || !startingSvg.includes('<svg')) {
+        this.showToast('error', 'Няма валиден SVG за запис.');
         return;
       }
 
       if (!this.state.animationId) {
-        const createRes = await createAnimationRequest({
-          name: this.DOM.projectName.value || 'Untitled',
-          svgText,
-          settings: this.buildCreateSettingsPayload()
+        const res = await createAnimationRequest({
+          name,
+          starting_svg: startingSvg,
+          animation_settings: animationSettings,
+          animation_segments: segments
         });
 
-        if (!createRes?.success || !createRes?.id) {
-          this.showToast('error', 'Неуспешно създаване на анимацията');
+        if (!res?.success || !res?.animation_id) {
+          this.showToast('error', 'Неуспешно създаване на анимацията.');
           return;
         }
 
-        this.state.animationId = Number(createRes.id);
+        this.state.animationId = Number(res.animation_id);
         this.setAnimationIdToUrl(this.state.animationId);
-        this.showToast('success', 'Анимацията е създадена');
+        this.state.hasUnsavedChanges = false;
+        this.showToast('success', 'Анимацията е създадена и записана');
+      } else {
+        const res = await saveAnimationRequest({
+          animationId: this.state.animationId,
+          name,
+          starting_svg: startingSvg,
+          animation_settings: animationSettings,
+          animation_segments: segments
+        });
+
+        if (!res?.success) {
+          this.showToast('error', 'Неуспешен запис на анимацията.');
+          return;
+        }
+
+        this.state.hasUnsavedChanges = false;
+        this.showToast('success', 'Записано');
       }
-
-      const savePayload = {
-        animation_id: this.state.animationId,
-        animation_name: this.DOM.projectName.value || 'Untitled',
-        animation_settings: JSON.stringify(this.state.settings),
-        animation_segments: this.buildSaveSegmentsPayload()
-      };
-
-      const saveRes = await saveAnimationRequest(savePayload);
-
-      if (!saveRes?.success) {
-        this.showToast('error', 'Грешка при запазване.');
-        return;
-      }
-
-      this.state.hasUnsavedChanges = false;
-
-      this.showToast('success', 'Запаметено успешно');
-
-      this.DOM.saveBtn.innerHTML = `
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path d="M16.6667 5L7.5 14.1667L3.33333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>Запазено!</span>
-      `;
-
-      setTimeout(() => {
-        this.DOM.saveBtn.innerHTML = `
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path d="M15.8333 17.5H4.16667C3.72464 17.5 3.30072 17.3244 2.98816 17.0118C2.67559 16.6993 2.5 16.2754 2.5 15.8333V4.16667C2.5 3.72464 2.67559 3.30072 2.98816 2.98816C3.30072 2.67559 3.72464 2.5 4.16667 2.5H13.3333L17.5 6.66667V15.8333C17.5 16.2754 17.3244 16.6993 17.0118 17.0118C16.6993 17.3244 16.2754 17.5 15.8333 17.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M14.1667 17.5V10.8333H5.83333V17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M5.83333 2.5V6.66667H12.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Запази</span>
-        `;
-      }, 2000);
     } catch (e) {
       console.error(e);
-      this.showToast('error', 'Грешка при запазване.');
+      this.showToast('error', 'Грешка при запис.');
     }
   }
 
-  showModal(modal) {
-    modal.style.display = 'flex';
-    setTimeout(() => modal.classList.add('active'), 10);
+  // ===========================
+  // Settings/time UI
+  // ===========================
+  updateTotalTimeLabel() {
+    const totalDuration = this.state.steps.reduce((max, step) => {
+      const endTime = step.startTime + step.duration;
+      return endTime > max ? endTime : max;
+    }, 0);
+    this.DOM.totalTime.textContent = this.formatTime(totalDuration);
   }
 
-  hideModal(modal) {
-    modal.classList.remove('active');
-    setTimeout(() => (modal.style.display = 'none'), 300);
+  // ===========================
+  // Canvas background
+  // ===========================
+  applyCanvasStyles() {
+    this.applyCanvasBackground();
   }
 
-  // ===== Keyboard =====
-  handleKeydown(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-      return;
-    }
-
-    switch (e.key) {
-      case ' ':
-        e.preventDefault();
-        this.togglePlayback();
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        this.seekToFrame(this.state.currentFrame - 1);
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        this.seekToFrame(this.state.currentFrame + 1);
-        break;
-      case 's':
-        if (e.ctrlKey || e.metaKey) {
-          e.preventDefault();
-          this.handleSave();
-        }
-        break;
-      case 'Home':
-        e.preventDefault();
-        this.seekToFrame(0);
-        break;
-      case 'End':
-        e.preventDefault();
-        this.seekToFrame(this.state.totalFrames - 1);
-        break;
-    }
+  // ===========================
+  // Editor UI
+  // ===========================
+  formatStepTime(step) {
+    const end = step.startTime + step.duration;
+    return `${step.startTime.toFixed(2)}s - ${end.toFixed(2)}s`;
   }
 
-  // ===== Export helpers =====
-  getExportSvgString(exportWidth, exportHeight) {
-    const vb = this.state.settings?.viewBox || { minX: 0, minY: 0, width: 800, height: 600 };
-
-    const clone = this.DOM.mainCanvas.cloneNode(true);
-    clone.removeAttribute('style');
-
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    clone.setAttribute('width', String(exportWidth));
-    clone.setAttribute('height', String(exportHeight));
-    clone.setAttribute('viewBox', `${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`);
-    clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-    if (!this.state.settings.transparentBg) {
-      const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      bg.setAttribute('x', vb.minX);
-      bg.setAttribute('y', vb.minY);
-      bg.setAttribute('width', vb.width);
-      bg.setAttribute('height', vb.height);
-      bg.setAttribute('fill', this.state.settings.canvasBgColor || '#0a0a12');
-      clone.insertBefore(bg, clone.firstChild);
-    }
-
-    return new XMLSerializer().serializeToString(clone);
+  // ===========================
+  // Timeline ruler values
+  // ===========================
+  secondsToPx(sec) {
+    return sec * PX_PER_SECOND;
   }
 
-  // ===== Export =====
-  async handleExportVideo() {
-    if (this.state.steps.length === 0) {
-      this.showToast('error', 'Няма стъпки за експортиране.');
-      return;
-    }
+  // ===========================
+  // Element selection helpers
+  // ===========================
+  enableControlsIfSvgLoaded() {
+    const loaded = !!this.state.svgContent;
+    if (!loaded) return;
 
-    this.DOM.exportProgress.style.display = 'flex';
-    this.DOM.exportProgressFill.style.width = '0%';
-    this.DOM.exportProgressText.textContent = '0%';
-
-    try {
-      const fps = this.state.settings.fps;
-      const frameDurationMs = 1000 / fps;
-
-      const vb = this.state.settings?.viewBox || { minX: 0, minY: 0, width: 800, height: 600 };
-      const exportW = Math.max(1, Math.round(vb.width || 800));
-      const exportH = Math.max(1, Math.round(vb.height || 600));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = exportW;
-      canvas.height = exportH;
-      const ctx = canvas.getContext('2d');
-
-      const stream = canvas.captureStream(fps);
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-          ? 'video/webm;codecs=vp9'
-          : 'video/webm'
-      });
-
-      const chunks = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      const totalDuration = this.state.steps.reduce((max, step) => Math.max(max, step.startTime + step.duration), 0);
-      const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
-
-      mediaRecorder.start();
-
-      const track = stream.getVideoTracks?.()[0];
-      const requestFrame =
-        track && typeof track.requestFrame === 'function' ? () => track.requestFrame() : null;
-
-      for (let frame = 0; frame < totalFrames; frame++) {
-        const currentTime = frame / fps;
-        this.applyAnimations(currentTime);
-
-        const svgData = this.getExportSvgString(exportW, exportH);
-
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        await new Promise((resolve) => {
-          img.onload = () => {
-            ctx.clearRect(0, 0, exportW, exportH);
-            ctx.drawImage(img, 0, 0, exportW, exportH);
-            if (requestFrame) requestFrame();
-            resolve();
-          };
-          img.onerror = () => resolve();
-          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-        });
-
-        const progress = Math.round(((frame + 1) / totalFrames) * 100);
-        this.DOM.exportProgressFill.style.width = `${progress}%`;
-        this.DOM.exportProgressText.textContent = `${progress}%`;
-
-        await new Promise((r) => setTimeout(r, frameDurationMs));
-      }
-
-      await new Promise((r) => setTimeout(r, frameDurationMs));
-
-      mediaRecorder.stop();
-      await new Promise((resolve) => {
-        mediaRecorder.onstop = resolve;
-      });
-
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${this.DOM.projectName.value || 'animation'}.webm`;
-      a.click();
-
-      URL.revokeObjectURL(url);
-
-      this.DOM.exportProgressFill.style.width = '100%';
-      this.DOM.exportProgressText.textContent = '100%';
-
-      setTimeout(() => {
-        this.DOM.exportProgress.style.display = 'none';
-        this.hideModal(this.DOM.exportModal);
-      }, 700);
-
-      this.showToast('success', 'Експортът е готов');
-    } catch (err) {
-      console.error(err);
-      this.showToast('error', 'Грешка при експортирането на видео.');
-      this.DOM.exportProgress.style.display = 'none';
-    }
+    this.DOM.targetElement.disabled = false;
   }
 
-  async handleExportFrames() {
-    if (this.state.steps.length === 0) {
-      this.showToast('error', 'Няма стъпки за експортиране.');
-      return;
-    }
+  // ===========================
+  // Background apply
+  // ===========================
+  applyBg() {
+    this.applyCanvasBackground();
+  }
 
-    this.DOM.exportProgress.style.display = 'flex';
-    this.DOM.exportProgressFill.style.width = '0%';
-    this.DOM.exportProgressText.textContent = '0%';
+  // ===========================
+  // Misc UI
+  // ===========================
+  updateCurrentTimeLabel(timeSeconds) {
+    this.DOM.currentTime.textContent = this.formatTime(timeSeconds);
+  }
 
-    try {
-      const fps = this.state.settings.fps;
+  // ===========================
+  // Default initialization when no project loaded
+  // ===========================
+  initEmpty() {
+    this.resetForNewSvg();
+  }
 
-      const vb = this.state.settings?.viewBox || { minX: 0, minY: 0, width: 800, height: 600 };
-      const exportW = Math.max(1, Math.round(vb.width || 800));
-      const exportH = Math.max(1, Math.round(vb.height || 600));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = exportW;
-      canvas.height = exportH;
-      const ctx = canvas.getContext('2d');
-
-      const totalDuration = this.state.steps.reduce((max, step) => Math.max(max, step.startTime + step.duration), 0);
-      const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
-
-      const frames = [];
-
-      for (let frame = 0; frame <= totalFrames; frame++) {
-        const currentTime = frame / fps;
-        this.applyAnimations(currentTime);
-
-        const svgData = this.getExportSvgString(exportW, exportH);
-
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        await new Promise((resolve) => {
-          img.onload = () => {
-            ctx.clearRect(0, 0, exportW, exportH);
-            ctx.drawImage(img, 0, 0, exportW, exportH);
-
-            canvas.toBlob(
-              (blob) => {
-                frames.push({ name: `frame_${String(frame).padStart(5, '0')}.png`, blob });
-                resolve();
-              },
-              'image/png',
-              1
-            );
-          };
-          img.onerror = resolve;
-          img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
-        });
-
-        const progress = Math.round(((frame + 1) / (totalFrames + 1)) * 100);
-        this.DOM.exportProgressFill.style.width = `${progress}%`;
-        this.DOM.exportProgressText.textContent = `${progress}%`;
-
-        await new Promise((r) => setTimeout(r, 1));
-      }
-
-      for (const frame of frames) {
-        const url = URL.createObjectURL(frame.blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = frame.name;
-        a.click();
-        URL.revokeObjectURL(url);
-        await new Promise((r) => setTimeout(r, 30));
-      }
-
-      this.DOM.exportProgressFill.style.width = '100%';
-      this.DOM.exportProgressText.textContent = '100%';
-
-      setTimeout(() => {
-        this.DOM.exportProgress.style.display = 'none';
-        this.hideModal(this.DOM.exportModal);
-      }, 1000);
-
-      this.showToast('success', 'Кадрите са експортирани');
-    } catch {
-      this.showToast('error', 'Грешка при експортирането на кадри.');
-      this.DOM.exportProgress.style.display = 'none';
-    }
+  // ===========================
+  // Table/time formatting
+  // ===========================
+  formatSeconds(s) {
+    return this.formatTime(s);
   }
 }
 
-// ===== Boot =====
+// Boot
 document.addEventListener('DOMContentLoaded', () => {
   const app = new SvgAnimatorEditor();
   app.init();
