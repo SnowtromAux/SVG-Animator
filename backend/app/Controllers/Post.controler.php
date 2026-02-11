@@ -100,10 +100,11 @@ class PostController extends Controller
                     return;
                 }
 
-                $likedPost = PostRepositories::likePost($conn, $postId, $userId);
+                $numLikesDislikes = PostRepositories::likePost($conn, $postId, $userId);
 
                 Response::success([
-                    "message" => ($likedPost ? "поста беше харесан успешно" : "поста вече е харесан")
+                    "message" => "поста беше харесан успешно",
+                    "data" => $numLikesDislikes,
                 ], 200);
             }
         );
@@ -121,10 +122,11 @@ class PostController extends Controller
                     return;
                 }
 
-                $likedPost = PostRepositories::dislikePost($conn, $postId, $userId);
+                $numLikesDislikes = PostRepositories::dislikePost($conn, $postId, $userId);
 
                 Response::success([
-                    "message" => ($likedPost ? "поста беше нехаресан успешно" : "поста вече е нехаресван")
+                    "message" => "поста беше нехаресан успешно",
+                    "data" => $numLikesDislikes,
                 ], 200);
             }
         );
@@ -157,7 +159,7 @@ class PostController extends Controller
         self::withDb(function ($conn) {
 
             $currentPostId = Request::param("current_post_id");
-            $userId = Session::user()["id"];
+            $userId = (int)Session::user()["id"];
             $nextPosts = PostRepositories::getPostsByUserId($conn, $currentPostId, $userId);
 
             foreach ($nextPosts as &$post) {
@@ -181,7 +183,7 @@ class PostController extends Controller
         self::withDb(function ($conn) {
             $currentPostId = Request::param("current_post_id");
             $userId = Request::param("user_id");
-            if(!$userId){
+            if (!$userId) {
                 Response::error('MISSING_ID', "не е подаден user_id", 400);
                 return;
             }
