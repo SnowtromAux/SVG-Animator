@@ -2201,7 +2201,6 @@ class SvgAnimatorEditor {
   }
 
   // ===== Export =====
-  // ✅ UPDATED: correct duration + full SVG shown (canvas matches viewBox)
   async handleExportVideo() {
     if (this.state.steps.length === 0) {
       this.showToast('error', 'Няма стъпки за експортиране.');
