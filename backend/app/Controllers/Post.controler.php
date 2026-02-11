@@ -138,7 +138,7 @@ class PostController extends Controller
 
             foreach ($nextPosts as &$post) {
                 $animationId = (int)$post['animation_id'];
-                $animation = AnimationRepositories::getAnimationPreviewById($conn, $animationId);
+                $animation = AnimationRepositories::getAnimationById($conn, $animationId);
 
                 $post['animation'] = $animation;
                 $userId = (int)$post['user_id'];
