@@ -1,4 +1,4 @@
-import { logoutRequest } from "../../../services/auth.js";
+import { logoutRequest } from "../../services/auth.js";
 
 class Navbar {
   constructor() {
@@ -112,10 +112,8 @@ class Navbar {
 
   async loadNavbar() {
     try {
-      // ⚠️ при теб пътят в момента е с Layout (главно L),
-      // оставям го както го имаш, но ако папката ти е layout (малко l) — смени го.
       const response = await fetch(
-        `${this.BASE}/src/components/Layout/Navbar/index.html`
+        `${this.BASE}/src/components/Navbar/index.html`
       );
       const html = await response.text();
 
