@@ -1,11 +1,20 @@
 import { API_BASE_URL } from "../constants/env.js";
 
+/**
+ * Ако искаш да ползваш API_BASE_URL вместо хардкод:
+ *   const MY_POSTS_URL = `${API_BASE_URL}/posts/get-my-posts`;
+ * Но ти изрично каза да е към този URL:
+ */
+const MY_POSTS_URL = "http://localhost/svganimator/backend/api/posts/get-my-posts";
+
 async function safeJsonFetch(url, options = {}) {
   console.log("[posts]", options.method || "GET", url);
 
   let response;
   try {
     response = await fetch(url, {
+      // важно за "my posts" ако бекенда ползва cookie session
+      credentials: options.credentials ?? "include",
       headers: { Accept: "application/json", ...(options.headers || {}) },
       ...options,
     });
@@ -41,8 +50,12 @@ async function safeJsonFetch(url, options = {}) {
   return { success: true, data };
 }
 
-export async function getAllPostsRequest({ currentPostId } = {}) {
-  const base = `${API_BASE_URL}/posts/get-all-posts`;
+/**
+ * Моите постове (infinite scroll)
+ * Пази същия интерфейс като getAllPostsRequest, за да ти е лесно.
+ */
+export async function getMyPostsRequest({ currentPostId } = {}) {
+  const base = MY_POSTS_URL;
 
   const hasParam =
     currentPostId !== undefined &&
@@ -57,13 +70,11 @@ export async function getAllPostsRequest({ currentPostId } = {}) {
 }
 
 /**
- * ✅ Моите постове
- * GET http://localhost/svganimator/backend/api/posts/get-my-posts
- *
- * (ползваме API_BASE_URL, за да не hardcode-ваме host)
+ * Ако все още го ползваш другаде – оставям го.
+ * (ако не ти трябва, може да го махнеш)
  */
-export async function getMyPostsRequest({ currentPostId } = {}) {
-  const base = `${API_BASE_URL}/posts/get-my-posts`;
+export async function getAllPostsRequest({ currentPostId } = {}) {
+  const base = `${API_BASE_URL}/posts/get-all-posts`;
 
   const hasParam =
     currentPostId !== undefined &&
@@ -84,24 +95,6 @@ export async function createPostRequest({ animationId, description } = {}) {
     animation_id: String(animationId ?? ""),
     description: String(description ?? ""),
   };
-
-  return safeJsonFetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-}
-
-/**
- * ✅ Delete post (ако имаш endpoint за това)
- * Ако твоят backend е на друг път - смени го тук.
- *
- * Очаквано: POST/DELETE /posts/delete-post { post_id }
- */
-export async function deleteMyPostRequest({ postId } = {}) {
-  const url = `${API_BASE_URL}/posts/delete-post`;
-
-  const payload = { post_id: String(postId ?? "") };
 
   return safeJsonFetch(url, {
     method: "POST",

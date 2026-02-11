@@ -203,6 +203,26 @@
   border-color: rgba(239, 68, 68, 0.35);
 }
 
+/* ✅ three-dots menu button (ползва се в новия render) */
+.post-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.post-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
 /* Post Content */
 .post-content {
   padding: 0 1.25rem;

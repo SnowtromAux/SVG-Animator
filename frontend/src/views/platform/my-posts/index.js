@@ -1,4 +1,4 @@
-import { getMyPostsRequest, deleteMyPostRequest } from "/svganimator/frontend/src/services/posts.js";
+import { getMyPostsRequest } from "/svganimator/frontend/src/services/posts.js";
 
 /* =========================
    Utils
@@ -20,8 +20,10 @@ function sanitizeSvg(svgText) {
   const svg = doc.querySelector("svg");
   if (!svg) return "";
 
+  // remove dangerous nodes
   doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
 
+  // remove inline event handlers + javascript: hrefs
   doc.querySelectorAll("*").forEach((el) => {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
@@ -35,6 +37,7 @@ function sanitizeSvg(svgText) {
     });
   });
 
+  // ensure viewBox if missing
   if (!svg.getAttribute("viewBox")) {
     const w = svg.getAttribute("width");
     const h = svg.getAttribute("height");
@@ -65,28 +68,30 @@ function getInitials(name) {
   return `${a}${b}`;
 }
 
-function safeJsonParse(str) {
-  if (!str || typeof str !== "string") return null;
-  try { return JSON.parse(str); } catch { return null; }
-}
-
 function pickSvgFromApi(raw) {
   const candidates = [
     raw?.svg_text,
     raw?.svg,
     raw?.starting_svg,
     raw?.animation_svg,
+
     raw?.animation?.starting_svg,
     raw?.animation?.svg_text,
     raw?.animation?.svg,
-    raw?.animation?.starting_svg,
   ];
+
   for (const c of candidates) {
     if (typeof c === "string" && c.trim().startsWith("<svg")) return c;
   }
   return "";
 }
 
+/**
+ * ВАЖНО: вече работи с твоя нов респонс:
+ * - raw.animation.duration
+ * - raw.animation.animation_settings
+ * - raw.animation.animation_segments
+ */
 function mapApiPost(raw) {
   const id = raw?.id ?? raw?.post_id ?? raw?.post?.id ?? raw?.post?.post_id;
 
@@ -104,120 +109,50 @@ function mapApiPost(raw) {
     raw?.post?.createdAt ??
     null;
 
-  const likes = Number(raw?.likes_count ?? raw?.likes ?? 0) || 0;
-  const dislikes = Number(raw?.dislikes_count ?? raw?.dislikes ?? 0) || 0;
+  const likes = Number(raw?.likes_count ?? raw?.likes ?? raw?.post?.likes_count ?? raw?.post?.likes ?? 0) || 0;
+  const dislikes = Number(raw?.dislikes_count ?? raw?.dislikes ?? raw?.post?.dislikes_count ?? raw?.post?.dislikes ?? 0) || 0;
 
   const userName =
-    raw?.username ??
     raw?.user?.name ??
     raw?.author?.name ??
+    raw?.username ??
+    raw?.post?.user?.name ??
     (raw?.user_id ? `User #${raw.user_id}` : "Потребител");
 
   const anim = raw?.animation || raw?.post?.animation || null;
 
-  const svgText = pickSvgFromApi(raw) || anim?.starting_svg || "";
+  const svgText = pickSvgFromApi(raw) || "";
   const svgPreview = sanitizeSvg(svgText);
 
-  // ⚠️ ако backend не ги връща — плейъра ще бъде disabled (но thumbnail ще се вижда)
   const animationSegments =
-    (Array.isArray(raw?.animation_segments) && raw.animation_segments) ||
     (Array.isArray(anim?.animation_segments) && anim.animation_segments) ||
     (Array.isArray(anim?.segments) && anim.segments) ||
     [];
 
   const animationSettings =
-    raw?.animation_settings ??
     anim?.animation_settings ??
     anim?.settings ??
     null;
 
-  // duration опит (ако го имаш в settings)
-  const settingsObj =
-    typeof animationSettings === "string" ? safeJsonParse(animationSettings) : animationSettings;
-  const fps = Number(settingsObj?.fps ?? 30) || 30;
-  const durationGuess =
-    Number(anim?.duration ?? raw?.duration ?? 0) ||
-    0;
+  const animationDuration =
+    Number(anim?.duration ?? raw?.duration ?? 0) || 0;
 
   return {
     id: Number(id),
-    userName: String(userName || "Потребител"),
+    userName,
     userInitials: getInitials(userName),
     description: String(description || ""),
     createdAt,
     likes,
     dislikes,
-
     svgPreview,
 
+    animationId: Number(anim?.id ?? raw?.animation_id ?? 0) || 0,
     animationName: String(anim?.name || ""),
     animationSegments,
     animationSettings,
-    fps,
-    durationGuess,
+    animationDuration,
   };
-}
-
-/* =========================
-   Inline ConfirmationModal
-========================= */
-function initConfirmationModal() {
-  const overlay = document.getElementById("confirmModalOverlay");
-  const closeBtn = document.getElementById("confirmModalClose");
-  const titleEl = document.getElementById("confirmModalTitle");
-  const msgEl = document.getElementById("confirmModalMessage");
-  const cancelBtn = document.getElementById("confirmModalCancel");
-  const confirmBtn = document.getElementById("confirmModalConfirm");
-
-  if (!overlay || !closeBtn || !titleEl || !msgEl || !cancelBtn || !confirmBtn) {
-    console.warn("[ConfirmationModal] Missing DOM nodes (inline).");
-    return;
-  }
-
-  let resolver = null;
-
-  const cleanupResolve = (value) => {
-    overlay.classList.remove("active");
-    document.body.style.overflow = "";
-    const r = resolver;
-    resolver = null;
-    if (r) r(value);
-  };
-
-  const open = ({
-    title = "Потвърждение",
-    message = "",
-    confirmText = "OK",
-    cancelText = "Откажи",
-  } = {}) => {
-    titleEl.textContent = title;
-    msgEl.textContent = message;
-    confirmBtn.textContent = confirmText;
-    cancelBtn.textContent = cancelText;
-
-    overlay.classList.add("active");
-    document.body.style.overflow = "hidden";
-
-    return new Promise((resolve) => {
-      resolver = resolve;
-    });
-  };
-
-  const close = () => cleanupResolve(false);
-
-  closeBtn.addEventListener("click", close);
-  cancelBtn.addEventListener("click", () => cleanupResolve(false));
-  confirmBtn.addEventListener("click", () => cleanupResolve(true));
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cleanupResolve(false);
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && overlay.classList.contains("active")) cleanupResolve(false);
-  });
-
-  window.ConfirmationModal = { open, close };
 }
 
 /* =========================
@@ -234,6 +169,8 @@ const state = {
 
   searchText: "",
   searchTimer: null,
+
+  reactions: {}, // local UI only
 };
 
 /* =========================
@@ -258,6 +195,18 @@ function setEmpty(isEmpty) {
 /* =========================
    Rendering
 ========================= */
+function ensureReactionState(post) {
+  if (!state.reactions[post.id]) {
+    state.reactions[post.id] = {
+      liked: false,
+      disliked: false,
+      likes: post.likes,
+      dislikes: post.dislikes,
+    };
+  }
+  return state.reactions[post.id];
+}
+
 function renderFeed() {
   stopAllPlayers(true);
 
@@ -268,10 +217,12 @@ function renderFeed() {
   setEmpty(list.length === 0 && !state.loading);
 
   container.innerHTML = list.map((post, idx) => renderPostCard(post, idx)).join("");
+
   hydrateVideoPlayers();
 }
 
 function renderPostCard(post, index) {
+  const r = ensureReactionState(post);
   const dateLabel = formatDateBg(post.createdAt);
 
   const hasVideo = Array.isArray(post.animationSegments) && post.animationSegments.length > 0;
@@ -318,14 +269,12 @@ function renderPostCard(post, index) {
           <span class="post-username">${escapeHtml(post.userName)}</span>
           <span class="post-time">${escapeHtml(dateLabel)}</span>
         </div>
-
-        <button class="post-delete-btn" data-action="delete-post" data-post-id="${post.id}" aria-label="Изтрий">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M3 6H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M8 6V4H16V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M19 6L18 20H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <button class="post-menu-btn" aria-label="Повече опции" data-action="noop">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="5" r="1.5" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="12" cy="19" r="1.5" fill="currentColor"/>
           </svg>
-          Изтрий
         </button>
       </div>
 
@@ -338,19 +287,18 @@ function renderPostCard(post, index) {
       </div>
 
       <div class="post-actions">
-        <!-- ✅ read-only -->
-        <button class="action-btn readonly" type="button" disabled aria-disabled="true" title="Само за преглед">
+        <button class="action-btn ${r.liked ? "liked" : ""}" data-action="like" data-post-id="${post.id}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="count">${Number(post.likes) || 0}</span>
+          <span class="count">${r.likes}</span>
         </button>
 
-        <button class="action-btn readonly" type="button" disabled aria-disabled="true" title="Само за преглед">
+        <button class="action-btn ${r.disliked ? "disliked" : ""}" data-action="dislike" data-post-id="${post.id}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="transform: rotate(180deg)">
             <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="count">${Number(post.dislikes) || 0}</span>
+          <span class="count">${r.dislikes}</span>
         </button>
 
         <span class="action-spacer"></span>
@@ -388,7 +336,9 @@ function initSearch() {
     state.searchText = value;
 
     if (state.searchTimer) clearTimeout(state.searchTimer);
-    state.searchTimer = setTimeout(() => applySearch(), 150);
+    state.searchTimer = setTimeout(() => {
+      applySearch();
+    }, 150);
   });
 }
 
@@ -407,7 +357,7 @@ async function loadMorePosts() {
   setLoader(false);
 
   if (!res || res.success !== true) {
-    console.error("[my-posts] load error:", res);
+    console.error("[posts] load error:", res);
     state.hasMore = false;
     applySearch();
     return;
@@ -428,6 +378,7 @@ async function loadMorePosts() {
     if (state.postIds.has(p.id)) continue;
     state.postIds.add(p.id);
     state.posts.push(p);
+    ensureReactionState(p);
     added++;
   }
 
@@ -447,7 +398,9 @@ function initInfiniteScroll() {
   const io = new IntersectionObserver(
     async (entries) => {
       const entry = entries[0];
-      if (entry && entry.isIntersecting) await loadMorePosts();
+      if (entry && entry.isIntersecting) {
+        await loadMorePosts();
+      }
     },
     { root: null, rootMargin: "600px 0px", threshold: 0.01 }
   );
@@ -456,33 +409,610 @@ function initInfiniteScroll() {
 }
 
 /* =========================
-   Delete
+   Reactions (local only)
 ========================= */
-async function deleteWithConfirmation(postId) {
-  const post = state.posts.find((p) => p.id === postId);
+function toggleLike(postId) {
+  const r = state.reactions[postId];
+  if (!r) return;
 
-  const ok = await window.ConfirmationModal.open({
-    title: "Потвърждение",
-    message: `Сигурен ли си, че искаш да изтриеш този пост${post?.animationName ? ` (“${post.animationName}”)` : ""}?`,
-    confirmText: "Изтрий",
-    cancelText: "Откажи",
-  });
-
-  if (!ok) return;
-
-  const res = await deleteMyPostRequest({ postId });
-  if (!res || res.success !== true) {
-    console.error("[my-posts] delete error:", res);
-    alert(res?.error?.message || "Грешка при изтриване.");
-    return;
+  if (r.liked) {
+    r.liked = false;
+    r.likes = Math.max(0, r.likes - 1);
+  } else {
+    r.liked = true;
+    r.likes += 1;
+    if (r.disliked) {
+      r.disliked = false;
+      r.dislikes = Math.max(0, r.dislikes - 1);
+    }
   }
 
-  // remove locally
-  state.posts = state.posts.filter((p) => p.id !== postId);
-  state.visiblePosts = state.visiblePosts.filter((p) => p.id !== postId);
-  state.postIds.delete(postId);
+  renderFeed();
+}
+
+function toggleDislike(postId) {
+  const r = state.reactions[postId];
+  if (!r) return;
+
+  if (r.disliked) {
+    r.disliked = false;
+    r.dislikes = Math.max(0, r.dislikes - 1);
+  } else {
+    r.disliked = true;
+    r.dislikes += 1;
+    if (r.liked) {
+      r.liked = false;
+      r.likes = Math.max(0, r.likes - 1);
+    }
+  }
 
   renderFeed();
+}
+
+/* =========================
+   Post "Video" Players
+========================= */
+const players = new Map();
+const PLAYER_DEFAULT_FPS = 30;
+
+function safeParseJson(str) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+function formatTime(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+/* ======= SVG value helpers ======= */
+function ensurePxIfLength(propName, value) {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+
+  if (propName !== "stroke-width" && propName !== "font-size") return s;
+
+  if (/^-?\d+(\.\d+)?[a-z%]+$/i.test(s)) return s;
+  if (/^-?\d+(\.\d+)?$/.test(s)) return `${s}px`;
+  return s;
+}
+
+function setSvgProperty(element, property, value) {
+  if (!element) return;
+  const v = value == null ? "" : String(value);
+
+  try {
+    element.setAttribute(property, v);
+  } catch {}
+
+  const styleable = new Set(["opacity", "fill", "stroke", "stroke-width", "font-size", "x", "y"]);
+  if (element.style && typeof element.style.setProperty === "function" && styleable.has(property)) {
+    element.style.setProperty(property, v);
+  }
+}
+
+function getStyleAttrValue(element, propName) {
+  const styleAttr = element?.getAttribute?.("style");
+  if (!styleAttr) return "";
+  const parts = String(styleAttr).split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.split(":");
+    if (!k || !rest.length) continue;
+    if (k.trim().toLowerCase() === propName.toLowerCase()) {
+      return rest.join(":").trim();
+    }
+  }
+  return "";
+}
+
+function getFallbackDefaultForProp(propName) {
+  if (propName === "stroke-width") return "1px";
+  if (propName === "font-size") return "16px";
+  if (propName === "opacity") return "1";
+  return "";
+}
+
+function getResolvedValue(svgRoot, element, propName) {
+  if (!element) return "";
+
+  let currentValue = element.getAttribute(propName);
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    const inline = element.style?.getPropertyValue?.(propName);
+    if (inline && inline.trim()) currentValue = inline.trim();
+  }
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    const raw = getStyleAttrValue(element, propName);
+    if (raw) currentValue = raw;
+  }
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    const cs = window.getComputedStyle(element);
+    let v = cs.getPropertyValue(propName);
+    if (v && typeof v === "string") v = v.trim();
+    if (!v) {
+      const camel = propName.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      v = (cs[camel] || "").toString().trim();
+    }
+    currentValue = v || "";
+  }
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    currentValue = getFallbackDefaultForProp(propName);
+  }
+
+  currentValue = ensurePxIfLength(propName, currentValue);
+  return String(currentValue || "").trim();
+}
+
+function parseNumberWithUnit(v) {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(-?\d+(\.\d+)?)([a-z%]*)$/i);
+  if (!m) return null;
+  return { num: parseFloat(m[1]), unit: m[3] || "" };
+}
+
+function interpolateNumberWithUnit(from, to, progress) {
+  const a = parseNumberWithUnit(from);
+  const b = parseNumberWithUnit(to);
+  if (!a || !b) return null;
+  if (a.unit !== b.unit) return null;
+  const value = a.num + (b.num - a.num) * progress;
+  return `${value}${a.unit}`;
+}
+
+function cubicBezierYForX(x, p1x, p1y, p2x, p2y) {
+  const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+  const cx = 3 * p1x;
+  const bx = 3 * (p2x - p1x) - cx;
+  const ax = 1 - cx - bx;
+
+  const cy = 3 * p1y;
+  const by = 3 * (p2y - p1y) - cy;
+  const ay = 1 - cy - by;
+
+  const bezX = (t) => ((ax * t + bx) * t + cx) * t;
+  const bezXDer = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  const bezY = (t) => ((ay * t + by) * t + cy) * t;
+
+  let t = clamp01(x);
+  for (let i = 0; i < 6; i++) {
+    const x2 = bezX(t) - x;
+    const d = bezXDer(t);
+    if (Math.abs(x2) < 1e-6) break;
+    if (Math.abs(d) < 1e-6) break;
+    t = clamp01(t - x2 / d);
+  }
+  return clamp01(bezY(t));
+}
+
+function applyEasing(t, easing) {
+  const tt = Math.max(0, Math.min(1, t));
+  switch (easing) {
+    case "linear":
+      return tt;
+    case "ease":
+      return cubicBezierYForX(tt, 0.25, 0.1, 0.25, 1);
+    case "ease-in":
+      return cubicBezierYForX(tt, 0.42, 0, 1, 1);
+    case "ease-out":
+      return cubicBezierYForX(tt, 0, 0, 0.58, 1);
+    case "ease-in-out":
+      return cubicBezierYForX(tt, 0.42, 0, 0.58, 1);
+    default: {
+      const m = String(easing || "").match(
+        /^cubic-bezier\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)$/i
+      );
+      if (m) {
+        const p1x = parseFloat(m[1]);
+        const p1y = parseFloat(m[2]);
+        const p2x = parseFloat(m[3]);
+        const p2y = parseFloat(m[4]);
+        if ([p1x, p1y, p2x, p2y].every((n) => Number.isFinite(n))) {
+          return cubicBezierYForX(tt, p1x, p1y, p2x, p2y);
+        }
+      }
+      return tt;
+    }
+  }
+}
+
+/* ======= Settings for preview ======= */
+function normalizeLoadedSettings(raw) {
+  const out = {
+    fps: PLAYER_DEFAULT_FPS,
+    useOriginalViewBox: true,
+    viewBox: null,
+    keepCentered: true,
+    canvasBgColor: "#0a0a12",
+    transparentBg: false,
+  };
+
+  if (!raw || typeof raw !== "object") return out;
+
+  if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
+  if (typeof raw.useOriginalViewBox === "boolean") out.useOriginalViewBox = raw.useOriginalViewBox;
+
+  if (raw.viewBox && typeof raw.viewBox === "object") {
+    out.viewBox = {
+      minX: Number(raw.viewBox.minX ?? 0) || 0,
+      minY: Number(raw.viewBox.minY ?? 0) || 0,
+      width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
+      height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600),
+    };
+  }
+
+  if (typeof raw.keepCentered === "boolean") out.keepCentered = raw.keepCentered;
+
+  if (typeof raw.canvasBgColor === "string" && raw.canvasBgColor.trim()) {
+    out.canvasBgColor = raw.canvasBgColor.trim();
+  }
+
+  if (typeof raw.transparentBg === "boolean") out.transparentBg = raw.transparentBg;
+
+  return out;
+}
+
+function parseSettings(settingsStrOrObj) {
+  const parsed =
+    typeof settingsStrOrObj === "string"
+      ? safeParseJson(settingsStrOrObj)
+      : (typeof settingsStrOrObj === "object" ? settingsStrOrObj : null);
+
+  return normalizeLoadedSettings(parsed);
+}
+
+function applyPreviewSettings(svgRoot, stageEl, settings) {
+  if (!svgRoot) return;
+
+  if (stageEl) {
+    stageEl.style.background = settings.transparentBg
+      ? "transparent"
+      : (settings.canvasBgColor || "#0a0a12");
+  }
+
+  if (!settings.useOriginalViewBox && settings.viewBox) {
+    const vb = settings.viewBox;
+    svgRoot.setAttribute("viewBox", `${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`);
+  }
+
+  svgRoot.setAttribute(
+    "preserveAspectRatio",
+    settings.keepCentered ? "xMidYMid meet" : "xMinYMin meet"
+  );
+}
+
+/* ======= Segments normalize (FIX: element_id by DOM order) ======= */
+function extractAnimPropertyAndToValue(seg) {
+  const animData =
+    typeof seg.animation_data === "string"
+      ? safeParseJson(seg.animation_data)
+      : (seg.animation_data || null);
+
+  if (!animData || typeof animData !== "object") return { property: null, toValue: null };
+
+  const keys = Object.keys(animData);
+  if (!keys.length) return { property: null, toValue: null };
+
+  const property = keys[0];
+  const toValue = animData[property];
+
+  return { property, toValue };
+}
+
+/**
+ * ТУК е ключовият фикс:
+ * element_id се мапва към svgRoot.querySelectorAll("*") (1-базирано),
+ * което най-често съвпада с backend номерацията.
+ */
+function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
+  const segments = Array.isArray(rawSegments) ? rawSegments : [];
+  const allEls = Array.from(svgRoot.querySelectorAll("*")); // svg itself is NOT included
+
+  const parsed = [];
+
+  for (const seg of segments) {
+    const start = Number(seg.start_at ?? seg.startTime ?? 0) || 0;
+    const dur =
+      Number(seg.duration ?? 0) ||
+      Math.max(0, (Number(seg.end_at ?? 0) || 0) - start);
+
+    const easing = String(seg.easing || "linear");
+    const { property, toValue } = extractAnimPropertyAndToValue(seg);
+
+    if (!property) continue;
+
+    let targetEl = null;
+
+    // 1) selector ако някой ден го добавиш
+    if (seg.element_selector && typeof seg.element_selector === "string") {
+      try {
+        targetEl = svgRoot.querySelector(seg.element_selector);
+      } catch {
+        targetEl = null;
+      }
+    }
+
+    // 2) element_id => DOM order (1-based)
+    if (!targetEl) {
+      const uid = Number(seg.element_id ?? seg.element_uid);
+      if (Number.isFinite(uid) && uid >= 1 && uid <= allEls.length) {
+        targetEl = allEls[uid - 1] || null;
+      }
+    }
+
+    // 2.1) “off-by-one” fallback (ако бекендът брои по-различно)
+    if (!targetEl) {
+      const uid = Number(seg.element_id ?? seg.element_uid);
+      if (Number.isFinite(uid)) {
+        const a = allEls[uid] || null; // +1
+        const b = allEls[uid - 2] || null; // -1
+        targetEl = a || b || null;
+      }
+    }
+
+    if (!targetEl) continue;
+
+    const toNorm = ensurePxIfLength(property, String(toValue ?? ""));
+
+    parsed.push({
+      element: targetEl,
+      property,
+      toValue: toNorm,
+      startTime: Math.max(0, start),
+      duration: Math.max(0.001, dur),
+      easing,
+      fromValue: "",
+    });
+  }
+
+  // chain fromValue per element+property by start order
+  const byEl = new Map();
+  for (const s of parsed) {
+    if (!byEl.has(s.element)) byEl.set(s.element, new Map());
+    const mp = byEl.get(s.element);
+    if (!mp.has(s.property)) mp.set(s.property, []);
+    mp.get(s.property).push(s);
+  }
+
+  for (const mp of byEl.values()) {
+    for (const arr of mp.values()) {
+      arr.sort((a, b) => a.startTime - b.startTime);
+      let prevTo = null;
+      for (const s of arr) {
+        const base = prevTo ?? getResolvedValue(svgRoot, s.element, s.property);
+        s.fromValue = ensurePxIfLength(s.property, String(base ?? ""));
+        prevTo = s.toValue;
+      }
+    }
+  }
+
+  return parsed;
+}
+
+function getFpsFromSettings(settings) {
+  const s = parseSettings(settings);
+  const fps = Number(s.fps);
+  if (Number.isFinite(fps) && fps > 0 && fps <= 120) return fps;
+  return PLAYER_DEFAULT_FPS;
+}
+
+function computeTotalDuration(segments, fallbackDuration = 0) {
+  let maxEnd = 0;
+  for (const s of segments) {
+    const end = (Number(s.startTime) || 0) + (Number(s.duration) || 0);
+    if (end > maxEnd) maxEnd = end;
+  }
+  // ако по някаква причина сегментите не дадат duration, ползваме anim.duration
+  return Math.max(0, maxEnd || Number(fallbackDuration) || 0);
+}
+
+function applySegmentsAtTime(svgRoot, segments, tSec) {
+  for (const seg of segments) {
+    const st = seg.startTime;
+    const en = st + seg.duration;
+
+    const from = seg.fromValue ?? "";
+    const to = seg.toValue ?? "";
+
+    if (tSec < st) {
+      setSvgProperty(seg.element, seg.property, from);
+      continue;
+    }
+
+    if (tSec >= en) {
+      setSvgProperty(seg.element, seg.property, to);
+      continue;
+    }
+
+    const progress = (tSec - st) / seg.duration;
+    const eased = applyEasing(progress, seg.easing);
+
+    const numWU = interpolateNumberWithUnit(from, to, eased);
+    if (numWU !== null) {
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, numWU));
+      continue;
+    }
+
+    const fromNum = parseFloat(from);
+    const toNum = parseFloat(to);
+    const fromIsNum = !Number.isNaN(fromNum) && String(from).trim() !== "";
+    const toIsNum = !Number.isNaN(toNum) && String(to).trim() !== "";
+
+    if (fromIsNum && toIsNum) {
+      const v = fromNum + (toNum - fromNum) * eased;
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, String(v)));
+      continue;
+    }
+
+    setSvgProperty(seg.element, seg.property, eased < 0.5 ? from : to);
+  }
+}
+
+/* ======= Player creation ======= */
+function createPlayerForPost(post) {
+  const root = document.querySelector(`.post-video[data-post-id="${post.id}"]`);
+  if (!root) return null;
+
+  const stage = root.querySelector("[data-video-stage]");
+  const timeEl = root.querySelector("[data-video-time]");
+  const progressEl = root.querySelector("[data-video-progress-fill]");
+  const playBtn = root.querySelector('[data-action="toggle-video"]');
+
+  const svg = stage?.querySelector("svg");
+  if (!svg) return null;
+
+  const settings = parseSettings(post.animationSettings);
+  applyPreviewSettings(svg, stage, settings);
+
+  const fps = getFpsFromSettings(settings);
+  const segs = normalizeSegmentsForPlayer(post.animationSegments, svg);
+
+  const totalDuration = computeTotalDuration(segs, post.animationDuration);
+  const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
+  const frameMs = 1000 / fps;
+
+  // set initial frame
+  if (segs.length) applySegmentsAtTime(svg, segs, 0);
+
+  const ctrl = {
+    postId: post.id,
+    root,
+    playBtn,
+    timeEl,
+    progressEl,
+
+    svg,
+    segments: segs,
+    fps,
+    frameMs,
+    totalDuration,
+    totalFrames,
+
+    isPlaying: false,
+    rafId: null,
+    currentFrame: 0,
+    startTimeMs: 0,
+
+    updateHud() {
+      const t = this.currentFrame / this.fps;
+      if (this.timeEl) {
+        this.timeEl.textContent = `${formatTime(t)} / ${formatTime(this.totalDuration)}`;
+      }
+      if (this.progressEl) {
+        const p = this.totalFrames > 0 ? (this.currentFrame / this.totalFrames) : 0;
+        this.progressEl.style.width = `${Math.max(0, Math.min(100, p * 100))}%`;
+      }
+    },
+
+    tick(now) {
+      if (!this.isPlaying) return;
+
+      const elapsed = now - this.startTimeMs;
+      this.currentFrame = Math.floor(elapsed / this.frameMs);
+
+      if (this.currentFrame >= this.totalFrames) {
+        this.currentFrame = 0;
+        this.startTimeMs = now;
+      }
+
+      const t = this.currentFrame / this.fps;
+      applySegmentsAtTime(this.svg, this.segments, t);
+      this.updateHud();
+
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    play() {
+      if (!this.segments.length) return;
+      if (this.isPlaying) return;
+
+      pauseAllExcept(this.postId);
+
+      this.isPlaying = true;
+      this.root.classList.add("is-playing");
+
+      this.startTimeMs = performance.now() - this.currentFrame * this.frameMs;
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    pause() {
+      this.isPlaying = false;
+      this.root.classList.remove("is-playing");
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      this.updateHud();
+    },
+
+    toggle() {
+      if (this.isPlaying) this.pause();
+      else this.play();
+    },
+
+    destroy(reset = false) {
+      this.pause();
+      if (reset) {
+        this.currentFrame = 0;
+        if (this.segments.length) applySegmentsAtTime(this.svg, this.segments, 0);
+        this.updateHud();
+      }
+    }
+  };
+
+  ctrl.updateHud();
+  return ctrl;
+}
+
+function hydrateVideoPlayers() {
+  const visibleIds = new Set(state.visiblePosts.map((p) => p.id));
+
+  for (const [postId, ctrl] of players.entries()) {
+    if (!visibleIds.has(postId)) {
+      ctrl.destroy(false);
+      players.delete(postId);
+    }
+  }
+
+  for (const post of state.visiblePosts) {
+    if (!post.svgPreview) continue;
+
+    if (players.has(post.id)) {
+      players.get(post.id).destroy(false);
+      players.delete(post.id);
+    }
+
+    const ctrl = createPlayerForPost(post);
+    if (ctrl) players.set(post.id, ctrl);
+  }
+}
+
+function pauseAllExcept(postId) {
+  for (const [id, ctrl] of players.entries()) {
+    if (id !== postId) ctrl.pause();
+  }
+}
+
+function stopAllPlayers(reset = false) {
+  for (const ctrl of players.values()) {
+    ctrl.destroy(reset);
+  }
+  players.clear();
+}
+
+function toggleVideo(postId) {
+  const ctrl = players.get(postId);
+  if (!ctrl) return;
+  ctrl.toggle();
 }
 
 /* =========================
@@ -497,17 +1027,14 @@ function initEvents() {
     if (!btn) return;
 
     const action = btn.dataset.action;
+    if (action === "noop") return;
+
     const postId = btn.dataset.postId ? parseInt(btn.dataset.postId, 10) : null;
+    if (!postId) return;
 
-    if (action === "toggle-video") {
-      if (!postId) return;
-      toggleVideo(postId);
-    }
-
-    if (action === "delete-post") {
-      if (!postId) return;
-      deleteWithConfirmation(postId);
-    }
+    if (action === "like") toggleLike(postId);
+    if (action === "dislike") toggleDislike(postId);
+    if (action === "toggle-video") toggleVideo(postId);
   });
 }
 
@@ -597,153 +1124,12 @@ function initParticles() {
 }
 
 /* =========================
-   Player (same as your posts page)
-========================= */
-const players = new Map();
-const PLAYER_DEFAULT_FPS = 30;
-
-function formatTime(seconds) {
-  const s = Math.max(0, Number(seconds) || 0);
-  const mins = Math.floor(s / 60);
-  const secs = Math.floor(s % 60);
-  return `${mins}:${String(secs).padStart(2, "0")}`;
-}
-
-function safeParseJson(str) {
-  try { return JSON.parse(str); } catch { return null; }
-}
-
-function parseSettings(settingsStrOrObj) {
-  const parsed =
-    typeof settingsStrOrObj === "string"
-      ? safeParseJson(settingsStrOrObj)
-      : (typeof settingsStrOrObj === "object" ? settingsStrOrObj : null);
-
-  return {
-    fps: Number(parsed?.fps ?? PLAYER_DEFAULT_FPS) || PLAYER_DEFAULT_FPS,
-    canvasBgColor: typeof parsed?.canvasBgColor === "string" ? parsed.canvasBgColor : "#0a0a12",
-    transparentBg: !!parsed?.transparentBg,
-    useOriginalViewBox: parsed?.useOriginalViewBox !== false,
-    keepCentered: parsed?.keepCentered !== false,
-    viewBox: parsed?.viewBox || null,
-  };
-}
-
-function applyPreviewSettings(svgRoot, stageEl, settings) {
-  if (!svgRoot) return;
-
-  if (stageEl) {
-    stageEl.style.background = settings.transparentBg ? "transparent" : (settings.canvasBgColor || "#0a0a12");
-  }
-
-  if (!settings.useOriginalViewBox && settings.viewBox) {
-    const vb = settings.viewBox;
-    const minX = Number(vb.minX ?? 0) || 0;
-    const minY = Number(vb.minY ?? 0) || 0;
-    const w = Math.max(1, Number(vb.width ?? 800) || 800);
-    const h = Math.max(1, Number(vb.height ?? 600) || 600);
-    svgRoot.setAttribute("viewBox", `${minX} ${minY} ${w} ${h}`);
-  }
-
-  svgRoot.setAttribute("preserveAspectRatio", settings.keepCentered ? "xMidYMid meet" : "xMinYMin meet");
-}
-
-/**
- * ⚠️ Тук няма да анимираме без сегменти.
- * Ако добавиш segments в backend response – ще върнем пълната логика.
- */
-function createPlayerForPost(post) {
-  const root = document.querySelector(`.post-video[data-post-id="${post.id}"]`);
-  if (!root) return null;
-
-  const stage = root.querySelector("[data-video-stage]");
-  const timeEl = root.querySelector("[data-video-time]");
-  const progressFill = root.querySelector("[data-video-progress]");
-  const svg = stage?.querySelector("svg");
-  if (!svg) return null;
-
-  const settings = parseSettings(post.animationSettings);
-  applyPreviewSettings(svg, stage, settings);
-
-  const segs = Array.isArray(post.animationSegments) ? post.animationSegments : [];
-  const hasSegments = segs.length > 0;
-
-  const fps = Number(settings.fps) || PLAYER_DEFAULT_FPS;
-  const totalDuration = hasSegments ? 0 : 0; // без сегменти -> 0:00
-
-  const ctrl = {
-    postId: post.id,
-    root,
-    svg,
-    timeEl,
-    progressFill,
-    isPlaying: false,
-
-    updateHud() {
-      const cur = 0;
-      const tot = totalDuration;
-      if (this.timeEl) this.timeEl.textContent = `${formatTime(cur)} / ${formatTime(tot)}`;
-      if (this.progressFill) this.progressFill.style.width = "0%";
-    },
-
-    toggle() {
-      // няма сегменти => просто игнор
-      this.updateHud();
-    },
-
-    destroy(reset = false) {
-      this.isPlaying = false;
-      this.root.classList.remove("is-playing");
-      this.updateHud();
-    }
-  };
-
-  ctrl.updateHud();
-  return ctrl;
-}
-
-function hydrateVideoPlayers() {
-  const visibleIds = new Set(state.visiblePosts.map((p) => p.id));
-
-  for (const [postId, ctrl] of players.entries()) {
-    if (!visibleIds.has(postId)) {
-      ctrl.destroy(false);
-      players.delete(postId);
-    }
-  }
-
-  for (const post of state.visiblePosts) {
-    if (!post.svgPreview) continue;
-
-    if (players.has(post.id)) {
-      players.get(post.id).destroy(false);
-      players.delete(post.id);
-    }
-
-    const ctrl = createPlayerForPost(post);
-    if (ctrl) players.set(post.id, ctrl);
-  }
-}
-
-function stopAllPlayers(reset = false) {
-  for (const ctrl of players.values()) ctrl.destroy(reset);
-  players.clear();
-}
-
-function toggleVideo(postId) {
-  const ctrl = players.get(postId);
-  if (!ctrl) return;
-  ctrl.toggle();
-}
-
-/* =========================
    Init
 ========================= */
 document.addEventListener("DOMContentLoaded", async () => {
   initParticles();
   initSearch();
   initEvents();
-  initConfirmationModal();
   initInfiniteScroll();
 
   await loadMorePosts();
