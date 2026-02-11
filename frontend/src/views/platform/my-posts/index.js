@@ -1,4 +1,4 @@
-import { getMyPostsRequest } from "/svganimator/frontend/src/services/posts.js";
+import { getMyPostsRequest, deletePostRequest } from "/svganimator/frontend/src/services/posts.js";
 
 /* =========================
    Utils
@@ -87,7 +87,7 @@ function pickSvgFromApi(raw) {
 }
 
 /**
- * ВАЖНО: вече работи с твоя нов респонс:
+ * ВАЖНО: работи с твоя нов респонс:
  * - raw.animation.duration
  * - raw.animation.animation_settings
  * - raw.animation.animation_segments
@@ -193,6 +193,71 @@ function setEmpty(isEmpty) {
 }
 
 /* =========================
+   Confirm modal (inline from HTML)
+========================= */
+const confirmModal = {
+  overlay: null,
+  messageEl: null,
+  btnCancel: null,
+  btnConfirm: null,
+  btnClose: null,
+
+  onConfirm: null,
+
+  init() {
+    this.overlay = el("confirmModalOverlay");
+    this.messageEl = el("confirmModalMessage");
+    this.btnCancel = el("confirmModalCancel");
+    this.btnConfirm = el("confirmModalConfirm");
+    this.btnClose = el("confirmModalClose");
+
+    if (!this.overlay || !this.messageEl || !this.btnCancel || !this.btnConfirm || !this.btnClose) {
+      console.warn("[confirmModal] missing DOM nodes");
+      return;
+    }
+
+    const close = () => this.close();
+
+    this.btnCancel.addEventListener("click", close);
+    this.btnClose.addEventListener("click", close);
+
+    this.overlay.addEventListener("click", (e) => {
+      if (e.target === this.overlay) close();
+    });
+
+    this.btnConfirm.addEventListener("click", async () => {
+      const fn = this.onConfirm;
+      this.close();
+      if (typeof fn === "function") {
+        await fn();
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.overlay.classList.contains("active")) {
+        close();
+      }
+    });
+  },
+
+  open({ message = "Сигурен ли си?", onConfirm }) {
+    if (!this.overlay) this.init();
+    if (!this.overlay) return;
+
+    this.messageEl.textContent = String(message || "Сигурен ли си?");
+    this.onConfirm = typeof onConfirm === "function" ? onConfirm : null;
+
+    this.overlay.classList.add("active");
+  },
+
+  close() {
+    if (!this.overlay) return;
+    this.overlay.classList.remove("active");
+    this.onConfirm = null;
+  },
+};
+
+/* =========================
    Rendering
 ========================= */
 function ensureReactionState(post) {
@@ -269,12 +334,17 @@ function renderPostCard(post, index) {
           <span class="post-username">${escapeHtml(post.userName)}</span>
           <span class="post-time">${escapeHtml(dateLabel)}</span>
         </div>
-        <button class="post-menu-btn" aria-label="Повече опции" data-action="noop">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="5" r="1.5" fill="currentColor"/>
-            <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
-            <circle cx="12" cy="19" r="1.5" fill="currentColor"/>
-          </svg>
+
+        <!-- ✅ ВЪРНАТ delete бутон -->
+        <button
+          class="post-delete-btn"
+          type="button"
+          data-action="delete"
+          data-post-id="${post.id}"
+          aria-label="Изтрий публикацията"
+          title="Изтрий"
+        >
+          Изтрий
         </button>
       </div>
 
@@ -708,11 +778,6 @@ function extractAnimPropertyAndToValue(seg) {
   return { property, toValue };
 }
 
-/**
- * ТУК е ключовият фикс:
- * element_id се мапва към svgRoot.querySelectorAll("*") (1-базирано),
- * което най-често съвпада с backend номерацията.
- */
 function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
   const segments = Array.isArray(rawSegments) ? rawSegments : [];
   const allEls = Array.from(svgRoot.querySelectorAll("*")); // svg itself is NOT included
@@ -749,7 +814,7 @@ function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
       }
     }
 
-    // 2.1) “off-by-one” fallback (ако бекендът брои по-различно)
+    // 2.1) off-by-one fallback
     if (!targetEl) {
       const uid = Number(seg.element_id ?? seg.element_uid);
       if (Number.isFinite(uid)) {
@@ -811,7 +876,6 @@ function computeTotalDuration(segments, fallbackDuration = 0) {
     const end = (Number(s.startTime) || 0) + (Number(s.duration) || 0);
     if (end > maxEnd) maxEnd = end;
   }
-  // ако по някаква причина сегментите не дадат duration, ползваме anim.duration
   return Math.max(0, maxEnd || Number(fallbackDuration) || 0);
 }
 
@@ -880,7 +944,6 @@ function createPlayerForPost(post) {
   const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
   const frameMs = 1000 / fps;
 
-  // set initial frame
   if (segs.length) applySegmentsAtTime(svg, segs, 0);
 
   const ctrl = {
@@ -966,7 +1029,7 @@ function createPlayerForPost(post) {
         if (this.segments.length) applySegmentsAtTime(this.svg, this.segments, 0);
         this.updateHud();
       }
-    }
+    },
   };
 
   ctrl.updateHud();
@@ -1016,6 +1079,45 @@ function toggleVideo(postId) {
 }
 
 /* =========================
+   Delete flow
+========================= */
+function requestDelete(postId) {
+  const id = Number(postId);
+  if (!Number.isFinite(id)) return;
+
+  confirmModal.open({
+    message: "Сигурен ли си, че искаш да изтриеш този пост? Това действие е необратимо.",
+    onConfirm: async () => {
+      // спираме плейъра ако е пуснат
+      const ctrl = players.get(id);
+      if (ctrl) {
+        ctrl.destroy(true);
+        players.delete(id);
+      }
+
+      const res = await deletePostRequest({ postId: id });
+      if (!res || res.success !== true) {
+        console.error("[posts] delete error:", res);
+        alert(res?.error?.message || "Грешка при изтриване.");
+        return;
+      }
+
+      // махаме от state
+      state.posts = state.posts.filter((p) => p.id !== id);
+      state.visiblePosts = state.visiblePosts.filter((p) => p.id !== id);
+      state.postIds.delete(id);
+      delete state.reactions[id];
+
+      if (state.currentPostId === id) {
+        state.currentPostId = state.posts.length ? state.posts[state.posts.length - 1].id : null;
+      }
+
+      applySearch();
+    },
+  });
+}
+
+/* =========================
    Events
 ========================= */
 function initEvents() {
@@ -1035,6 +1137,9 @@ function initEvents() {
     if (action === "like") toggleLike(postId);
     if (action === "dislike") toggleDislike(postId);
     if (action === "toggle-video") toggleVideo(postId);
+
+    // ✅ delete
+    if (action === "delete") requestDelete(postId);
   });
 }
 
@@ -1127,6 +1232,8 @@ function initParticles() {
    Init
 ========================= */
 document.addEventListener("DOMContentLoaded", async () => {
+  confirmModal.init();
+
   initParticles();
   initSearch();
   initEvents();

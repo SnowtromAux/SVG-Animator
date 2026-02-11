@@ -6,6 +6,7 @@ import { API_BASE_URL } from "../constants/env.js";
  * Но ти изрично каза да е към този URL:
  */
 const MY_POSTS_URL = "http://localhost/svganimator/backend/api/posts/get-my-posts";
+const DELETE_POST_URL = "http://localhost/svganimator/backend/api/posts/delete-post";
 
 async function safeJsonFetch(url, options = {}) {
   console.log("[posts]", options.method || "GET", url);
@@ -98,6 +99,17 @@ export async function createPostRequest({ animationId, description } = {}) {
 
   return safeJsonFetch(url, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** ✅ DELETE пост */
+export async function deletePostRequest({ postId } = {}) {
+  const payload = { post_id: Number(postId) };
+
+  return safeJsonFetch(DELETE_POST_URL, {
+    method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
