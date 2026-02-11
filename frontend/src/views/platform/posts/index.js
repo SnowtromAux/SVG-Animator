@@ -74,6 +74,7 @@ function pickSvgFromApi(raw) {
     raw?.animation?.starting_svg,
     raw?.animation?.svg_text,
     raw?.animation?.svg,
+    raw?.animation?.starting_svg,
   ];
 
   for (const c of candidates) {
@@ -122,8 +123,20 @@ function mapApiPost(raw) {
     raw?.post?.user?.name ??
     (raw?.user_id ? `User #${raw.user_id}` : "Потребител");
 
-  const svgText = pickSvgFromApi(raw);
+  const anim = raw?.animation || raw?.post?.animation || null;
+
+  const svgText = pickSvgFromApi(raw) || anim?.starting_svg || "";
   const svgPreview = sanitizeSvg(svgText);
+
+  const animationSegments =
+    (Array.isArray(anim?.animation_segments) && anim.animation_segments) ||
+    (Array.isArray(anim?.segments) && anim.segments) ||
+    [];
+
+  const animationSettings =
+    anim?.animation_settings ??
+    anim?.settings ??
+    null;
 
   return {
     id: Number(id),
@@ -134,6 +147,10 @@ function mapApiPost(raw) {
     likes,
     dislikes,
     svgPreview,
+
+    animationName: String(anim?.name || ""),
+    animationSegments,
+    animationSettings,
   };
 }
 
@@ -190,6 +207,9 @@ function ensureReactionState(post) {
 }
 
 function renderFeed() {
+  // важно: като правим innerHTML re-render, спираме всички "видеа" за да няма висящи RAF-и
+  stopAllPlayers(true);
+
   const container = el("feedContainer");
   if (!container) return;
 
@@ -197,14 +217,49 @@ function renderFeed() {
   setEmpty(list.length === 0 && !state.loading);
 
   container.innerHTML = list.map((post, idx) => renderPostCard(post, idx)).join("");
+
+  // след re-render – инициализираме player-ите за видимите постове
+  hydrateVideoPlayers();
 }
 
 function renderPostCard(post, index) {
   const r = ensureReactionState(post);
   const dateLabel = formatDateBg(post.createdAt);
 
+  const hasVideo = Array.isArray(post.animationSegments) && post.animationSegments.length > 0;
+
   const svgHtml = post.svgPreview
-    ? `<div class="post-svg">${post.svgPreview}</div>`
+    ? `
+      <div class="post-video" data-video-root data-post-id="${post.id}">
+        <div class="post-video-stage" data-video-stage>
+          <div class="post-svg">${post.svgPreview}</div>
+        </div>
+
+        <button
+          class="post-video-play"
+          type="button"
+          data-action="toggle-video"
+          data-post-id="${post.id}"
+          ${hasVideo ? "" : "disabled"}
+          aria-label="${hasVideo ? "Пусни/Спри" : "Няма анимация"}"
+          title="${hasVideo ? "Play / Pause" : "Няма сегменти"}"
+        >
+          <svg class="icon-play" width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18V6L19 12L9 18Z" fill="currentColor"/>
+          </svg>
+          <svg class="icon-pause" width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M7 6H10V18H7V6ZM14 6H17V18H14V6Z" fill="currentColor"/>
+          </svg>
+        </button>
+
+        <div class="post-video-hud">
+          <div class="post-video-time" data-video-time>0:00 / 0:00</div>
+          <div class="post-video-progress">
+            <div class="post-video-progress-fill" data-video-progress></div>
+          </div>
+        </div>
+      </div>
+    `
     : `<div class="post-media-fallback">Няма SVG</div>`;
 
   return `
@@ -309,7 +364,6 @@ async function loadMorePosts() {
     return;
   }
 
-  // backend: { success:true, nextPosts:[...] }
   const rawList =
     (Array.isArray(res.nextPosts) && res.nextPosts) ||
     (Array.isArray(res.posts) && res.posts) ||
@@ -329,7 +383,6 @@ async function loadMorePosts() {
     added++;
   }
 
-  // update cursor
   if (state.posts.length > 0) {
     state.currentPostId = state.posts[state.posts.length - 1].id;
   }
@@ -398,13 +451,526 @@ function toggleDislike(postId) {
 }
 
 /* =========================
+   Post "Video" Players
+========================= */
+
+const players = new Map(); // postId -> controller
+const PLAYER_DEFAULT_FPS = 30;
+
+function safeParseJson(str) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+function formatTime(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function parseCssColorToHex(value) {
+  if (!value) return "";
+  const v = String(value).trim();
+
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) return v;
+  if (/^#[0-9A-Fa-f]{3}$/.test(v)) {
+    const r = v[1], g = v[2], b = v[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+
+  const rgbMatch = v.match(
+    /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i
+  );
+  if (rgbMatch) {
+    const r = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[1]))));
+    const g = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[2]))));
+    const b = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[3]))));
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
+function setSvgProperty(element, property, value) {
+  if (!element) return;
+  const v = value == null ? "" : String(value);
+
+  try {
+    element.setAttribute(property, v);
+  } catch {
+    // ignore
+  }
+
+  const styleable = new Set(["opacity", "fill", "stroke", "stroke-width", "font-size"]);
+  if (element.style && typeof element.style.setProperty === "function" && styleable.has(property)) {
+    element.style.setProperty(property, v);
+  }
+}
+
+function getResolvedValue(element, propName) {
+  if (!element) return "";
+  let currentValue = element.getAttribute(propName);
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    const inline = element.style?.getPropertyValue?.(propName);
+    if (inline && inline.trim()) currentValue = inline.trim();
+  }
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    const cs = window.getComputedStyle(element);
+    let v = cs.getPropertyValue(propName);
+    if (v && typeof v === "string") v = v.trim();
+    if (!v) {
+      const camel = propName.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      v = (cs[camel] || "").toString().trim();
+    }
+    currentValue = v || "";
+  }
+
+  if (!currentValue || String(currentValue).trim() === "") {
+    if (propName === "stroke-width") currentValue = "1px";
+    if (propName === "font-size") currentValue = "16px";
+    if (propName === "opacity") currentValue = "1";
+  }
+
+  return String(currentValue || "").trim();
+}
+
+function parseNumberWithUnit(v) {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(-?\d+(\.\d+)?)([a-z%]*)$/i);
+  if (!m) return null;
+  return { num: parseFloat(m[1]), unit: m[3] || "" };
+}
+
+function interpolateNumberWithUnit(from, to, progress) {
+  const a = parseNumberWithUnit(from);
+  const b = parseNumberWithUnit(to);
+  if (!a || !b) return null;
+  if (a.unit !== b.unit) return null;
+  const value = a.num + (b.num - a.num) * progress;
+  return `${value}${a.unit}`;
+}
+
+function interpolateColor(hex1, hex2, t) {
+  const c1 = hex1.replace("#", "");
+  const c2 = hex2.replace("#", "");
+
+  const r1 = parseInt(c1.slice(0, 2), 16);
+  const g1 = parseInt(c1.slice(2, 4), 16);
+  const b1 = parseInt(c1.slice(4, 6), 16);
+
+  const r2 = parseInt(c2.slice(0, 2), 16);
+  const g2 = parseInt(c2.slice(2, 4), 16);
+  const b2 = parseInt(c2.slice(4, 6), 16);
+
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+function cubicBezierYForX(x, p1x, p1y, p2x, p2y) {
+  const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+  const cx = 3 * p1x;
+  const bx = 3 * (p2x - p1x) - cx;
+  const ax = 1 - cx - bx;
+
+  const cy = 3 * p1y;
+  const by = 3 * (p2y - p1y) - cy;
+  const ay = 1 - cy - by;
+
+  const bezX = (t) => ((ax * t + bx) * t + cx) * t;
+  const bezXDer = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  const bezY = (t) => ((ay * t + by) * t + cy) * t;
+
+  let t = clamp01(x);
+  for (let i = 0; i < 6; i++) {
+    const x2 = bezX(t) - x;
+    const d = bezXDer(t);
+    if (Math.abs(x2) < 1e-6) break;
+    if (Math.abs(d) < 1e-6) break;
+    t = clamp01(t - x2 / d);
+  }
+  return clamp01(bezY(t));
+}
+
+function applyEasing(t, easing) {
+  const tt = Math.max(0, Math.min(1, t));
+  switch (easing) {
+    case "linear":
+      return tt;
+    case "ease":
+      return cubicBezierYForX(tt, 0.25, 0.1, 0.25, 1);
+    case "ease-in":
+      return cubicBezierYForX(tt, 0.42, 0, 1, 1);
+    case "ease-out":
+      return cubicBezierYForX(tt, 0, 0, 0.58, 1);
+    case "ease-in-out":
+      return cubicBezierYForX(tt, 0.42, 0, 0.58, 1);
+    default: {
+      const m = String(easing || "").match(
+        /^cubic-bezier\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)$/i
+      );
+      if (m) {
+        const p1x = parseFloat(m[1]);
+        const p1y = parseFloat(m[2]);
+        const p2x = parseFloat(m[3]);
+        const p2y = parseFloat(m[4]);
+        if ([p1x, p1y, p2x, p2y].every((n) => Number.isFinite(n))) {
+          return cubicBezierYForX(tt, p1x, p1y, p2x, p2y);
+        }
+      }
+      return tt;
+    }
+  }
+}
+
+function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
+  const segments = Array.isArray(rawSegments) ? rawSegments : [];
+
+  // helper: approximate UID mapping by DOM order if няма selector
+  const uidMap = new Map(); // uid -> element
+  const candidates = [];
+  const skipTags = new Set([
+    "svg", "defs", "style", "script", "title", "desc", "metadata",
+    "lineargradient", "radialgradient", "stop", "clippath", "mask", "pattern"
+  ]);
+
+  const walk = (node) => {
+    if (!node || !node.tagName) return;
+    const tag = node.tagName.toLowerCase();
+    if (!skipTags.has(tag)) {
+      candidates.push(node);
+    }
+    for (const ch of node.children || []) walk(ch);
+  };
+  walk(svgRoot);
+
+  candidates.forEach((node, idx) => {
+    uidMap.set(idx + 1, node);
+  });
+
+  const parsed = [];
+
+  for (const seg of segments) {
+    const start = Number(seg.start_at ?? seg.startTime ?? 0) || 0;
+    const dur =
+      Number(seg.duration ?? 0) ||
+      Math.max(0, (Number(seg.end_at ?? 0) || 0) - start);
+
+    const easing = String(seg.easing || "linear");
+
+    const animData =
+      typeof seg.animation_data === "string"
+        ? safeParseJson(seg.animation_data)
+        : (seg.animation_data || null);
+
+    if (!animData || typeof animData !== "object") continue;
+    const keys = Object.keys(animData);
+    if (!keys.length) continue;
+
+    const property = keys[0];
+    const toValue = String(animData[property] ?? "");
+
+    let targetEl = null;
+
+    if (seg.element_selector && typeof seg.element_selector === "string") {
+      try {
+        targetEl = svgRoot.querySelector(seg.element_selector);
+      } catch {
+        targetEl = null;
+      }
+    }
+
+    if (!targetEl) {
+      const uid = Number(seg.element_id ?? seg.element_uid);
+      if (Number.isFinite(uid) && uidMap.has(uid)) {
+        targetEl = uidMap.get(uid);
+      }
+    }
+
+    if (!targetEl) continue;
+
+    parsed.push({
+      element: targetEl,
+      property,
+      toValue,
+      startTime: Math.max(0, start),
+      duration: Math.max(0.001, dur),
+      easing,
+    });
+  }
+
+  // FIX: chain fromValue per element+property by start order
+  const groups = new Map(); // key -> seg[]
+  for (const s of parsed) {
+    const k = `${s.element}__${s.property}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(s);
+  }
+
+  for (const arr of groups.values()) {
+    arr.sort((a, b) => a.startTime - b.startTime);
+    let prevTo = null;
+    for (const s of arr) {
+      const base = prevTo ?? getResolvedValue(s.element, s.property);
+      s.fromValue = String(base ?? "");
+      prevTo = s.toValue;
+    }
+  }
+
+  return parsed;
+}
+
+function getFpsFromSettings(settings) {
+  if (!settings) return PLAYER_DEFAULT_FPS;
+
+  const parsed =
+    typeof settings === "string" ? safeParseJson(settings) :
+    (typeof settings === "object" ? settings : null);
+
+  if (!parsed || typeof parsed !== "object") return PLAYER_DEFAULT_FPS;
+
+  const fps =
+    Number(parsed.fps) ||
+    Number(parsed?.settings?.fps) ||
+    Number(parsed?.timeline?.fps);
+
+  if (Number.isFinite(fps) && fps > 0 && fps <= 120) return fps;
+
+  return PLAYER_DEFAULT_FPS;
+}
+
+function computeTotalDuration(segments) {
+  let maxEnd = 0;
+  for (const s of segments) {
+    const end = (Number(s.startTime) || 0) + (Number(s.duration) || 0);
+    if (end > maxEnd) maxEnd = end;
+  }
+  return Math.max(0, maxEnd);
+}
+
+function applySegmentsAtTime(segments, tSec) {
+  for (const seg of segments) {
+    const st = seg.startTime;
+    const en = st + seg.duration;
+
+    const from = seg.fromValue ?? "";
+    const to = seg.toValue ?? "";
+
+    if (tSec < st) {
+      setSvgProperty(seg.element, seg.property, from);
+      continue;
+    }
+
+    if (tSec >= en) {
+      setSvgProperty(seg.element, seg.property, to);
+      continue;
+    }
+
+    const progress = (tSec - st) / seg.duration;
+    const eased = applyEasing(progress, seg.easing);
+
+    const numWU = interpolateNumberWithUnit(from, to, eased);
+    if (numWU !== null) {
+      setSvgProperty(seg.element, seg.property, numWU);
+      continue;
+    }
+
+    const fromNum = parseFloat(from);
+    const toNum = parseFloat(to);
+    const fromIsNum = !Number.isNaN(fromNum) && String(from).trim() !== "";
+    const toIsNum = !Number.isNaN(toNum) && String(to).trim() !== "";
+
+    if (fromIsNum && toIsNum) {
+      const v = fromNum + (toNum - fromNum) * eased;
+      setSvgProperty(seg.element, seg.property, String(v));
+      continue;
+    }
+
+    const fromHex = parseCssColorToHex(from);
+    const toHex = parseCssColorToHex(to);
+    if (fromHex && toHex) {
+      setSvgProperty(seg.element, seg.property, interpolateColor(fromHex, toHex, eased));
+      continue;
+    }
+
+    setSvgProperty(seg.element, seg.property, eased < 0.5 ? from : to);
+  }
+}
+
+function createPlayerForPost(post) {
+  const root = document.querySelector(`.post-video[data-post-id="${post.id}"]`);
+  if (!root) return null;
+
+  const stage = root.querySelector("[data-video-stage]");
+  const timeEl = root.querySelector("[data-video-time]");
+  const progressEl = root.querySelector("[data-video-progress]");
+  const playBtn = root.querySelector('[data-action="toggle-video"]');
+
+  const svg = stage?.querySelector("svg");
+  if (!svg) return null;
+
+  const fps = getFpsFromSettings(post.animationSettings);
+  const segs = normalizeSegmentsForPlayer(post.animationSegments, svg);
+  const totalDuration = computeTotalDuration(segs);
+  const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
+  const frameMs = 1000 / fps;
+
+  // set initial frame
+  applySegmentsAtTime(segs, 0);
+
+  const ctrl = {
+    postId: post.id,
+    root,
+    playBtn,
+    timeEl,
+    progressEl,
+
+    svg,
+    segments: segs,
+    fps,
+    frameMs,
+    totalDuration,
+    totalFrames,
+
+    isPlaying: false,
+    rafId: null,
+    currentFrame: 0,
+    startTimeMs: 0,
+
+    updateHud() {
+      const t = this.currentFrame / this.fps;
+      if (this.timeEl) {
+        this.timeEl.textContent = `${formatTime(t)} / ${formatTime(this.totalDuration)}`;
+      }
+      if (this.progressEl) {
+        const p = this.totalFrames > 0 ? (this.currentFrame / this.totalFrames) : 0;
+        this.progressEl.style.width = `${Math.max(0, Math.min(100, p * 100))}%`;
+      }
+    },
+
+    tick(now) {
+      if (!this.isPlaying) return;
+
+      const elapsed = now - this.startTimeMs;
+      this.currentFrame = Math.floor(elapsed / this.frameMs);
+
+      if (this.currentFrame >= this.totalFrames) {
+        // loop
+        this.currentFrame = 0;
+        this.startTimeMs = now;
+      }
+
+      const t = this.currentFrame / this.fps;
+      applySegmentsAtTime(this.segments, t);
+      this.updateHud();
+
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    play() {
+      if (!this.segments.length) return;
+      if (this.isPlaying) return;
+
+      // stop others
+      pauseAllExcept(this.postId);
+
+      this.isPlaying = true;
+      this.root.classList.add("is-playing");
+
+      this.startTimeMs = performance.now() - this.currentFrame * this.frameMs;
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    pause() {
+      this.isPlaying = false;
+      this.root.classList.remove("is-playing");
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      this.updateHud();
+    },
+
+    toggle() {
+      if (this.isPlaying) this.pause();
+      else this.play();
+    },
+
+    destroy(reset = false) {
+      this.pause();
+      if (reset) {
+        this.currentFrame = 0;
+        applySegmentsAtTime(this.segments, 0);
+        this.updateHud();
+      }
+    }
+  };
+
+  ctrl.updateHud();
+  return ctrl;
+}
+
+function hydrateVideoPlayers() {
+  // създаваме/обновяваме players само за visiblePosts
+  const visibleIds = new Set(state.visiblePosts.map((p) => p.id));
+
+  // махаме старите контролери за постове, които вече не са рендернати
+  for (const [postId, ctrl] of players.entries()) {
+    if (!visibleIds.has(postId)) {
+      ctrl.destroy(false);
+      players.delete(postId);
+    }
+  }
+
+  for (const post of state.visiblePosts) {
+    if (!post.svgPreview) continue;
+
+    // ако вече има контролер – махаме го (DOM се е сменил)
+    if (players.has(post.id)) {
+      players.get(post.id).destroy(false);
+      players.delete(post.id);
+    }
+
+    const ctrl = createPlayerForPost(post);
+    if (ctrl) players.set(post.id, ctrl);
+  }
+}
+
+function pauseAllExcept(postId) {
+  for (const [id, ctrl] of players.entries()) {
+    if (id !== postId) ctrl.pause();
+  }
+}
+
+function stopAllPlayers(reset = false) {
+  for (const ctrl of players.values()) {
+    ctrl.destroy(reset);
+  }
+  players.clear();
+}
+
+function toggleVideo(postId) {
+  const ctrl = players.get(postId);
+  if (!ctrl) return;
+  ctrl.toggle();
+}
+
+/* =========================
    Events
 ========================= */
 function initEvents() {
   const feed = el("feedContainer");
   if (!feed) return;
 
-  // само бутони like/dislike, няма отваряне на post
   feed.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
@@ -417,6 +983,7 @@ function initEvents() {
 
     if (action === "like") toggleLike(postId);
     if (action === "dislike") toggleDislike(postId);
+    if (action === "toggle-video") toggleVideo(postId);
   });
 }
 
