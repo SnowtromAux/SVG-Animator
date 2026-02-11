@@ -47,81 +47,137 @@ class PostRepositories
         );
     }
 
-    public static function likePost(mysqli $db, int $postId, int $userId): int
+    public static function getPostReactions(mysqli $db, int $postId): array
     {
-        return DataBase::transaction(
-            $db,
-            function () use ($db, $postId, $userId): int {
+        $sql = "
+        SELECT
+            SUM(type = 'like')    AS likes,
+            SUM(type = 'dislike') AS dislikes
+        FROM reaction
+        WHERE post_id = ?
+    ";
 
-                $sqlCheck = "SELECT id, type
-                    FROM reaction
-                    WHERE post_id = ? AND user_id = ?
-                    LIMIT 1
-                    FOR UPDATE";
+        $row = DataBase::fetchRow($db, $sql, "i", [$postId]);
 
-                $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
-
-                if ($row !== null) {
-                    if ($row['type'] === 'like') {
-                        return 0;
-                    }
-
-                    $sqlUpdate = "UPDATE reaction 
-                              SET type = ? 
-                              WHERE id = ?";
-
-                    return DataBase::exec($db, $sqlUpdate, "si", ['like', (int)$row['id']]);
-                }
-
-                $sqlInsert = "INSERT INTO reaction 
-                         (post_id, user_id, type)
-                         VALUES (?, ?, ?)";
-
-                DataBase::insert($db, $sqlInsert, "iis", [$postId, $userId, 'like']);
-
-                return 1;
-            }
-        );
+        return [
+            'likes'    => (int)($row['likes'] ?? 0),
+            'dislikes' => (int)($row['dislikes'] ?? 0),
+        ];
     }
 
-    public static function dislikePost(mysqli $db, int $postId, int $userId): int
+    public static function likePost(mysqli $db, int $postId, int $userId): array
     {
-        return DataBase::transaction($db, function () use ($db, $postId, $userId): int {
+        return DataBase::transaction($db, function () use ($db, $postId, $userId) {
 
-            $sqlCheck = "SELECT id, type
-                     FROM reaction
-                     WHERE post_id = ? AND user_id = ?
-                     LIMIT 1
-                     FOR UPDATE";
+            $reaction = null;
+
+            $sqlCheck = "
+            SELECT id, type
+            FROM reaction
+            WHERE post_id = ? AND user_id = ?
+            LIMIT 1
+            FOR UPDATE
+        ";
+
+            $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
+
+            if ($row !== null) {
+                if ($row['type'] === 'like') {
+                    DataBase::exec(
+                        $db,
+                        "DELETE FROM reaction WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = null;
+                } else {
+                    DataBase::exec(
+                        $db,
+                        "UPDATE reaction SET type = 'like' WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = 'like';
+                }
+            } else {
+                DataBase::insert(
+                    $db,
+                    "INSERT INTO reaction (post_id, user_id, type)
+                 VALUES (?, ?, 'like')",
+                    "ii",
+                    [$postId, $userId]
+                );
+                $reaction = 'like';
+            }
+
+            $counts = self::getPostReactions($db, $postId);
+
+            return [
+                'reaction' => $reaction,
+                'likes'    => $counts['likes'],
+                'dislikes' => $counts['dislikes'],
+            ];
+        });
+    }
+
+
+    public static function dislikePost(mysqli $db, int $postId, int $userId): array
+    {
+        return DataBase::transaction($db, function () use ($db, $postId, $userId) {
+
+            $reaction = null;
+
+            $sqlCheck = "
+            SELECT id, type
+            FROM reaction
+            WHERE post_id = ? AND user_id = ?
+            LIMIT 1
+            FOR UPDATE
+        ";
 
             $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
 
             if ($row !== null) {
                 if ($row['type'] === 'dislike') {
-                    return 0;
+                    DataBase::exec(
+                        $db,
+                        "DELETE FROM reaction WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = null;
+                } else {
+                    DataBase::exec(
+                        $db,
+                        "UPDATE reaction SET type = 'dislike' WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = 'dislike';
                 }
-
-                $sqlUpdate = "UPDATE reaction SET type = ? WHERE id = ?";
-                return DataBase::exec(
+            } else {
+                DataBase::insert(
                     $db,
-                    $sqlUpdate,
-                    "si",
-                    ['dislike', (int)$row['id']]
+                    "INSERT INTO reaction (post_id, user_id, type)
+                 VALUES (?, ?, 'dislike')",
+                    "ii",
+                    [$postId, $userId]
                 );
+                $reaction = 'dislike';
             }
 
-            $sqlInsert = "INSERT INTO reaction (post_id, user_id, type)
-                      VALUES (?, ?, ?)";
-            DataBase::insert(
-                $db,
-                $sqlInsert,
-                "iis",
-                [$postId, $userId, 'dislike']
-            );
+            $counts = self::getPostReactions($db, $postId);
 
-            return 1;
+            return [
+                'reaction' => $reaction,
+                'likes'    => $counts['likes'],
+                'dislikes' => $counts['dislikes'],
+            ];
         });
     }
+
+
+
 
     public static function getNextPosts(mysqli $db, ?int $currentPostId): array
     {
