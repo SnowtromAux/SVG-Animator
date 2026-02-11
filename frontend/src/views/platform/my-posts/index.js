@@ -1,32 +1,32 @@
-// ===== My Posts Page (PREVIEW ONLY: NO POST MODAL, NO COMMENTS, LIKE/DISLIKE READ-ONLY) =====
+// ===== My Posts Page (PREVIEW ONLY: image + description + read-only reactions + delete) =====
 
-// mock current user (връзваш по-късно към auth)
 const CURRENT_USER = { name: 'Вие', initials: 'Аз' };
 
-// Само мои постове (placeholder)
+// ✅ без tags логика
+// imageUrl е optional – ако няма, показваме placeholder
 const MY_POSTS = [
   {
     id: 101,
     user: CURRENT_USER,
     time: 'преди 1 час',
     text: 'Днес направих нов micro-interaction за hover state с SVG. Използвах easing и малък overshoot — супер гладко става!',
-    tags: ['microinteractions', 'svg', 'ui', 'easing'],
     likes: 12,
-    dislikes: 1
+    dislikes: 1,
+    imageUrl: '' // можеш да сложиш URL по-късно
   },
   {
     id: 102,
     user: CURRENT_USER,
     time: 'вчера',
-    text: 'Пускам кратък breakdown как правя path morph без да се “къса” формата. Най-важното е да имаш приблизително еднакъв брой сегменти и да нормализираш командите.',
-    tags: ['pathmorph', 'svg', 'frontend', 'tips'],
+    text: 'Пускам кратък breakdown как правя path morph без да се “къса” формата...',
     likes: 28,
-    dislikes: 0
+    dislikes: 0,
+    imageUrl: ''
   }
 ];
 
 /* =========================
-   Inline ConfirmationModal (като в my-projects)
+   Inline ConfirmationModal (като my-projects)
 ========================= */
 function initConfirmationModal() {
   const overlay = document.getElementById("confirmModalOverlay");
@@ -91,38 +91,6 @@ function initConfirmationModal() {
 }
 
 /* =========================
-   Helpers
-========================= */
-function shouldShowMore(text, limit = 180) {
-  return (text || '').length > limit;
-}
-
-function normalizeTags(tags) {
-  if (!Array.isArray(tags)) return [];
-  return tags
-    .map(t => String(t).trim())
-    .filter(Boolean)
-    .map(t => (t.startsWith('#') ? t.slice(1) : t))
-    .map(t => t.replace(/\s+/g, ''))
-    .slice(0, 8);
-}
-
-function renderTags(tags) {
-  const list = normalizeTags(tags);
-  if (list.length === 0) return '';
-
-  return `
-    <div class="post-tags">
-      ${list.map(t => `
-        <span class="tag-chip" data-action="noop">
-          <span class="hash">#</span>${t}
-        </span>
-      `).join('')}
-    </div>
-  `;
-}
-
-/* =========================
    Render feed
 ========================= */
 function renderFeed() {
@@ -143,7 +111,20 @@ function renderFeed() {
 }
 
 function renderPost(post) {
-  const showMore = shouldShowMore(post.text);
+  const img = String(post.imageUrl || '').trim();
+
+  const mediaHtml = img
+    ? `<img class="post-media-img" src="${img}" alt="Preview">`
+    : `
+      <div class="post-media-placeholder" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M21 15L16 10L5 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Preview
+      </div>
+    `;
 
   return `
     <article class="post-card" data-post-id="${post.id}">
@@ -156,20 +137,11 @@ function renderPost(post) {
       </div>
 
       <div class="post-content">
-        <p class="post-text ${showMore ? 'preview' : ''}">${post.text}</p>
-
-        ${showMore ? `<div class="post-hint">(Съкратен преглед)</div>` : ``}
-
-        ${renderTags(post.tags)}
-
         <div class="post-media" data-action="noop">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M21 15L16 10L5 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Placeholder
+          ${mediaHtml}
         </div>
+
+        <p class="post-text">${post.text}</p>
       </div>
 
       <div class="post-actions">
@@ -237,12 +209,11 @@ async function deletePostWithConfirmation(postId) {
 }
 
 /* =========================
-   Events
+   Events (само delete)
 ========================= */
 function initEvents() {
   const feed = document.getElementById('feedContainer');
 
-  // реагира само на data-action (delete). Like/dislike са disabled и нямат data-action.
   feed.addEventListener('click', (e) => {
     const actionBtn = e.target.closest('[data-action]');
     if (!actionBtn) return;
