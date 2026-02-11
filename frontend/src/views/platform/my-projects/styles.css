@@ -313,12 +313,21 @@
   filter: brightness(1.07);
 }
 
-.btn-card-delete {
+.btn-card-danger {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
   box-shadow: 0 10px 28px -16px rgba(239, 68, 68, 0.45);
 }
 
-.btn-card-delete:hover {
+.btn-card-danger:hover {
+  filter: brightness(1.06);
+}
+
+.btn-card-share {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(16, 185, 129, 0.95));
+  box-shadow: 0 10px 28px -16px rgba(16, 185, 129, 0.45);
+}
+
+.btn-card-share:hover {
   filter: brightness(1.06);
 }
 
@@ -466,6 +475,8 @@
 
   .btn-card {
     height: 42px;
+    font-size: 0.8125rem;
+    padding: 0 0.6rem;
   }
 }
 
@@ -709,4 +720,162 @@
 
 .confirm-btn:active {
   transform: translateY(1px);
+}
+
+/* =========================================================
+   SHARE MODAL
+========================================================= */
+.share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition);
+}
+
+.share-modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.share-modal {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transform: scale(0.9) translateY(20px);
+  transition: transform var(--transition);
+}
+
+.share-modal-overlay.active .share-modal {
+  transform: scale(1) translateY(0);
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.share-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.share-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.share-modal-close:hover {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.share-modal-body {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.share-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.share-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 110px;
+  padding: 0.875rem 1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.share-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.share-textarea:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.share-textarea:focus {
+  background: var(--surface-hover);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.share-hint {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.share-modal-footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+  border: 1px solid transparent;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(16, 185, 129, 0.95));
+  box-shadow: 0 10px 28px -16px rgba(16, 185, 129, 0.45);
+}
+
+.share-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.share-btn:active {
+  transform: translateY(1px);
+}
+
+.share-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }

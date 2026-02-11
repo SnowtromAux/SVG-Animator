@@ -3,6 +3,8 @@ import {
   deleteAnimationRequest,
 } from "/svganimator/frontend/src/services/animations.js";
 
+import { createPostRequest } from "/svganimator/frontend/src/services/posts.js";
+
 /* =========================
    Inline InfoModal
 ========================= */
@@ -124,6 +126,68 @@ function initConfirmationModal() {
   });
 
   window.ConfirmationModal = { open, close };
+}
+
+/* =========================
+   Inline ShareModal
+========================= */
+function initShareModal() {
+  const overlay = document.getElementById("shareModalOverlay");
+  const closeBtn = document.getElementById("shareModalClose");
+  const titleEl = document.getElementById("shareModalTitle");
+  const textarea = document.getElementById("shareDescription");
+  const submitBtn = document.getElementById("shareModalSubmit");
+
+  if (!overlay || !closeBtn || !titleEl || !textarea || !submitBtn) {
+    console.warn("[ShareModal] Missing DOM nodes (inline).");
+    return;
+  }
+
+  let resolver = null;
+
+  const cleanupResolve = (value) => {
+    overlay.classList.remove("active");
+    document.body.style.overflow = "";
+
+    const r = resolver;
+    resolver = null;
+    if (r) r(value);
+  };
+
+  const open = ({ title = "Сподели", placeholder = "" } = {}) => {
+    titleEl.textContent = title;
+    textarea.value = "";
+    if (placeholder) textarea.placeholder = placeholder;
+
+    overlay.classList.add("active");
+    document.body.style.overflow = "hidden";
+
+    // фокус в textarea
+    setTimeout(() => textarea.focus(), 0);
+
+    return new Promise((resolve) => {
+      resolver = resolve;
+    });
+  };
+
+  const close = () => cleanupResolve({ ok: false, description: "" });
+
+  closeBtn.addEventListener("click", close);
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("active")) close();
+  });
+
+  submitBtn.addEventListener("click", () => {
+    const description = String(textarea.value || "").trim();
+    cleanupResolve({ ok: true, description });
+  });
+
+  window.ShareModal = { open, close };
 }
 
 /* =========================
@@ -296,14 +360,10 @@ class ProjectsDashboard {
 
   // ✅ Това оправя проблема (Back/Forward cache)
   async onPageShow(event) {
-    // event.persisted === true => страницата е върната от bfcache
-    // navType 'back_forward' покрива някои браузъри/случаи
     const navEntry = performance.getEntriesByType?.("navigation")?.[0];
     const isBackForward = event?.persisted === true || navEntry?.type === "back_forward";
-
     if (!isBackForward) return;
 
-    // Презареждаме данните, без да ресетваме текущото търсене/страница
     await this.loadProjects({ page: this.currentPage || 1, searchText: this.searchText || "" });
   }
 
@@ -388,6 +448,14 @@ class ProjectsDashboard {
     if (this.nextPageBtn) this.nextPageBtn.disabled = isLoading || this.currentPage >= this.totalPages;
     if (this.searchInput) this.searchInput.disabled = !!isLoading;
     if (this.createNewBtn) this.createNewBtn.disabled = !!isLoading;
+
+    // disable action buttons inside cards (ако има ги)
+    if (this.projectsGrid) {
+      this.projectsGrid.querySelectorAll("button").forEach((b) => {
+        // не пипаме pagination / header — само вътре в grid
+        b.disabled = !!isLoading;
+      });
+    }
   }
 
   renderProjects() {
@@ -452,9 +520,31 @@ class ProjectsDashboard {
 
               <p class="card-date">Създаден: ${formatDateBg(project.createdAt)}</p>
 
+              <!-- ✅ 3 бутона, винаги заедно -->
               <div class="card-actions">
-                <button class="btn-card btn-card-delete" data-action="delete" data-id="${project.id}">Изтрий</button>
-                <button class="btn-card btn-card-edit" data-action="edit" data-id="${project.id}">Редактирай</button>
+                <button class="btn-card btn-card-danger btn-card-icon" data-action="delete" data-id="${project.id}" aria-label="Изтрий">
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M7.5 2.5h5M3.75 5h12.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <path d="M6.25 5l.6 11.2c.05.95.83 1.7 1.78 1.7h2.74c.95 0 1.73-.75 1.78-1.7L13.75 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <path d="M8.75 8.2v6.2M11.25 8.2v6.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                </button>
+
+                <button class="btn-card btn-card-edit btn-card-icon" data-action="edit" data-id="${project.id}" aria-label="Редактирай">
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M12.9 3.4l3.7 3.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <path d="M4 16h3.5l9.4-9.4a1.4 1.4 0 0 0 0-2L15.4 3a1.4 1.4 0 0 0-2 0L4 12.5V16z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+
+                <button class="btn-card btn-card-share btn-card-icon" data-action="share" data-id="${project.id}" aria-label="Сподели">
+                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                    <path d="M12.5 6.667L16.667 3.333" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <path d="M16.667 3.333v4.167h-4.167" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M16.25 10.833V15c0 .92-.746 1.667-1.667 1.667H5.417A1.667 1.667 0 0 1 3.75 15V5.833c0-.92.746-1.666 1.667-1.666H9.583" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <path d="M8.333 11.667L16.667 3.333" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -484,6 +574,11 @@ class ProjectsDashboard {
 
         if (action === "delete") {
           await this.deleteWithConfirmation(projectId);
+          return;
+        }
+
+        if (action === "share") {
+          await this.shareProject(projectId);
           return;
         }
       });
@@ -584,6 +679,55 @@ class ProjectsDashboard {
     }
   }
 
+  async shareProject(projectId) {
+    const project = this.projects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    if (!window.ShareModal?.open) {
+      alert("ShareModal не е инициализиран.");
+      return;
+    }
+
+    const result = await window.ShareModal.open({
+      title: `Сподели: ${project.name}`,
+      placeholder: "Напиши описание...",
+    });
+
+    if (!result?.ok) return;
+
+    const description = String(result.description || "").trim();
+    if (!description) {
+      window.InfoModal?.open?.({
+        title: "Липсва описание",
+        items: [{ name: "Съобщение", value: "Моля, добави описание преди да споделиш." }],
+      });
+      return;
+    }
+
+    this.setLoading(true);
+
+    const res = await createPostRequest({
+      animationId: projectId,
+      description,
+    });
+
+    this.setLoading(false);
+
+    if (!res || res.success !== true) {
+      console.error("[my-projects] share error:", res);
+      window.InfoModal?.open?.({
+        title: "Грешка",
+        items: [{ name: "Съобщение", value: res?.error?.message || "Грешка при споделяне." }],
+      });
+      return;
+    }
+
+    window.InfoModal?.open?.({
+      title: "Успешно!",
+      items: [{ name: "Съобщение", value: "Проектът беше споделен успешно." }],
+    });
+  }
+
   initParticles() {
     const canvas = document.getElementById("particleCanvas");
     if (!canvas) return;
@@ -670,5 +814,6 @@ class ProjectsDashboard {
 document.addEventListener("DOMContentLoaded", () => {
   initInfoModal();
   initConfirmationModal();
+  initShareModal();
   new ProjectsDashboard();
 });
