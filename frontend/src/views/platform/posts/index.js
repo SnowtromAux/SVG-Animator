@@ -1,4 +1,8 @@
-import { getAllPostsRequest } from "/svganimator/frontend/src/services/posts.js";
+import {
+  getAllPostsRequest,
+  likePostRequest,
+  dislikePostRequest,
+} from "/svganimator/frontend/src/services/posts.js";
 
 /* =========================
    Utils
@@ -172,7 +176,8 @@ const state = {
   searchText: "",
   searchTimer: null,
 
-  reactions: {}, // local UI only
+  reactions: {}, // UI state (counts + what user clicked)
+  reactionPending: new Set(), // postId lock while request is running
 };
 
 /* =========================
@@ -223,6 +228,32 @@ function renderFeed() {
 
   // след re-render – инициализираме player-ите за видимите постове
   hydrateVideoPlayers();
+}
+
+/** Обновява само UI-то на реакциите за конкретен пост (без renderFeed()) */
+function updateReactionUi(postId) {
+  const r = state.reactions[postId];
+  if (!r) return;
+
+  const likeBtn = document.querySelector(`[data-action="like"][data-post-id="${postId}"]`);
+  const dislikeBtn = document.querySelector(`[data-action="dislike"][data-post-id="${postId}"]`);
+
+  if (likeBtn) {
+    likeBtn.classList.toggle("liked", !!r.liked);
+    const count = likeBtn.querySelector(".count");
+    if (count) count.textContent = String(r.likes ?? 0);
+  }
+
+  if (dislikeBtn) {
+    dislikeBtn.classList.toggle("disliked", !!r.disliked);
+    const count = dislikeBtn.querySelector(".count");
+    if (count) count.textContent = String(r.dislikes ?? 0);
+  }
+
+  // (по желание) докато чакаме заявка — можеш да disable-неш бутоните
+  const pending = state.reactionPending.has(postId);
+  if (likeBtn) likeBtn.disabled = pending;
+  if (dislikeBtn) dislikeBtn.disabled = pending;
 }
 
 function renderPostCard(post, index) {
@@ -413,44 +444,82 @@ function initInfiniteScroll() {
 }
 
 /* =========================
-   Reactions (local only)
+   Reactions (API)
 ========================= */
-function toggleLike(postId) {
+function applyReactionResponse(postId, payload) {
   const r = state.reactions[postId];
-  if (!r) return;
+  if (!r || !payload) return;
 
-  if (r.liked) {
-    r.liked = false;
-    r.likes = Math.max(0, r.likes - 1);
-  } else {
+  const reaction = payload.reaction; // "like" | "dislike" | null
+  const likes = Number(payload.likes);
+  const dislikes = Number(payload.dislikes);
+
+  if (Number.isFinite(likes)) r.likes = likes;
+  if (Number.isFinite(dislikes)) r.dislikes = dislikes;
+
+  if (reaction === "like") {
     r.liked = true;
-    r.likes += 1;
-    if (r.disliked) {
-      r.disliked = false;
-      r.dislikes = Math.max(0, r.dislikes - 1);
-    }
+    r.disliked = false;
+  } else if (reaction === "dislike") {
+    r.liked = false;
+    r.disliked = true;
+  } else {
+    // null
+    r.liked = false;
+    r.disliked = false;
   }
-
-  renderFeed();
 }
 
-function toggleDislike(postId) {
+async function toggleLike(postId) {
+  if (state.reactionPending.has(postId)) return;
   const r = state.reactions[postId];
   if (!r) return;
 
-  if (r.disliked) {
-    r.disliked = false;
-    r.dislikes = Math.max(0, r.dislikes - 1);
-  } else {
-    r.disliked = true;
-    r.dislikes += 1;
-    if (r.liked) {
-      r.liked = false;
-      r.likes = Math.max(0, r.likes - 1);
-    }
-  }
+  state.reactionPending.add(postId);
+  updateReactionUi(postId);
 
-  renderFeed();
+  try {
+    const res = await likePostRequest({ postId });
+
+    if (!res || res.success !== true) {
+      console.error("[posts] like error:", res);
+      return;
+    }
+
+    const data = res.data || res?.data?.data || res?.data; // safety, ако някъде е обвито
+    applyReactionResponse(postId, data);
+  } catch (e) {
+    console.error("[posts] like exception:", e);
+  } finally {
+    state.reactionPending.delete(postId);
+    updateReactionUi(postId);
+  }
+}
+
+async function toggleDislike(postId) {
+  if (state.reactionPending.has(postId)) return;
+  const r = state.reactions[postId];
+  if (!r) return;
+
+  state.reactionPending.add(postId);
+  updateReactionUi(postId);
+
+  try {
+    const res = await dislikePostRequest({ postId });
+
+    if (!res || res.success !== true) {
+      console.error("[posts] dislike error:", res);
+      return;
+    }
+
+    const data = res.data || res?.data?.data || res?.data;
+    applyReactionResponse(postId, data);
+  } catch (e) {
+    console.error("[posts] dislike exception:", e);
+  } finally {
+    state.reactionPending.delete(postId);
+    updateReactionUi(postId);
+  }
 }
 
 /* =========================
@@ -1024,7 +1093,7 @@ function createPlayerForPost(post) {
 
   const stage = root.querySelector("[data-video-stage]");
   const timeEl = root.querySelector("[data-video-time]");
-  const progressEl = root.querySelector("[data-video-progress]");
+  const progressEl = root.querySelector("[data-video-progress-fill]");
   const playBtn = root.querySelector('[data-action="toggle-video"]');
 
   const svg = stage?.querySelector("svg");
@@ -1126,7 +1195,7 @@ function createPlayerForPost(post) {
         applySegmentsAtTime(this.svg, this.segments, 0);
         this.updateHud();
       }
-    }
+    },
   };
 
   ctrl.updateHud();
@@ -1194,8 +1263,8 @@ function initEvents() {
     const postId = btn.dataset.postId ? parseInt(btn.dataset.postId, 10) : null;
     if (!postId) return;
 
-    if (action === "like") toggleLike(postId);
-    if (action === "dislike") toggleDislike(postId);
+    if (action === "like") void toggleLike(postId);
+    if (action === "dislike") void toggleDislike(postId);
     if (action === "toggle-video") toggleVideo(postId);
   });
 }

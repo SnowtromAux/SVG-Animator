@@ -304,7 +304,7 @@ registerForm.addEventListener('submit', async (e) => {
     const result = await registerRequest(payload);
 
     if (result?.success) {
-      // ✅ Green ONLY when server says success
+      // Green ONLY when server says success
       setSuccess(usernameInput);
       setSuccess(emailInput);
       setSuccess(passwordInput);

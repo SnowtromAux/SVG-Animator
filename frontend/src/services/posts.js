@@ -8,6 +8,10 @@ import { API_BASE_URL } from "../constants/env.js";
 const MY_POSTS_URL = "http://localhost/svganimator/backend/api/posts/get-my-posts";
 const DELETE_POST_URL = "http://localhost/svganimator/backend/api/posts/delete-post";
 
+// ✅ Reactions (like / dislike)
+const LIKE_POST_URL = "http://localhost/svganimator/backend/api/posts/like-post";
+const DISLIKE_POST_URL = "http://localhost/svganimator/backend/api/posts/dislike-post";
+
 async function safeJsonFetch(url, options = {}) {
   console.log("[posts]", options.method || "GET", url);
 
@@ -110,6 +114,28 @@ export async function deletePostRequest({ postId } = {}) {
 
   return safeJsonFetch(DELETE_POST_URL, {
     method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** ✅ LIKE пост (toggle: like -> null) */
+export async function likePostRequest({ postId } = {}) {
+  const payload = { post_id: Number(postId) };
+
+  return safeJsonFetch(LIKE_POST_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** ✅ DISLIKE пост (toggle: dislike -> null) */
+export async function dislikePostRequest({ postId } = {}) {
+  const payload = { post_id: Number(postId) };
+
+  return safeJsonFetch(DISLIKE_POST_URL, {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });

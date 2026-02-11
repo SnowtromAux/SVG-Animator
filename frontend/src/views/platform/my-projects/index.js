@@ -3,6 +3,8 @@ import {
   deleteAnimationRequest,
 } from "/svganimator/frontend/src/services/animations.js";
 
+
+
 import { createPostRequest } from "/svganimator/frontend/src/services/posts.js";
 
 /* =========================
@@ -339,7 +341,7 @@ class ProjectsDashboard {
     this.searchText = "";
     this.searchTimer = null;
 
-    // ✅ важно: bind за pageshow handler
+    // важно: bind за pageshow handler
     this.onPageShow = this.onPageShow.bind(this);
 
     this.init();
@@ -349,16 +351,16 @@ class ProjectsDashboard {
     this.cacheElements();
     this.bindEvents();
 
-    // ✅ При първоначално зареждане
+    // При първоначално зареждане
     await this.loadProjects({ page: 1, searchText: "" });
 
-    // ✅ Ако се върнеш назад (bfcache), pageshow ще се викне
+    // Ако се върнеш назад (bfcache), pageshow ще се викне
     window.addEventListener("pageshow", this.onPageShow);
 
     this.initParticles();
   }
 
-  // ✅ Това оправя проблема (Back/Forward cache)
+  // Това оправя проблема (Back/Forward cache)
   async onPageShow(event) {
     const navEntry = performance.getEntriesByType?.("navigation")?.[0];
     const isBackForward = event?.persisted === true || navEntry?.type === "back_forward";
@@ -520,7 +522,7 @@ class ProjectsDashboard {
 
               <p class="card-date">Създаден: ${formatDateBg(project.createdAt)}</p>
 
-              <!-- ✅ 3 бутона, винаги заедно -->
+              <!-- 3 бутона, винаги заедно -->
               <div class="card-actions">
                 <button class="btn-card btn-card-danger btn-card-icon" data-action="delete" data-id="${project.id}" aria-label="Изтрий">
                   <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">

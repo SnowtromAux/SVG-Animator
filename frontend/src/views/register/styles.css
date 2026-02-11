@@ -457,7 +457,7 @@
   }
 }
 
-/* ✅ loading state като login */
+/* loading state като login */
 .submit-btn.loading .btn-text,
 .submit-btn.loading .btn-icon {
   opacity: 0;

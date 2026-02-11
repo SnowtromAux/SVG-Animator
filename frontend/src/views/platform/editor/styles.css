@@ -941,7 +941,7 @@
     minmax(110px, 0.9fr)
     minmax(140px, 1fr)
     minmax(120px, 0.9fr)
-    var(--steps-actions-width); /* ✅ FIX: use the same width var */
+    var(--steps-actions-width); /* FIX: use the same width var */
   align-items: center;
   padding: 0 0.75rem;
   column-gap: 0.5rem;
@@ -1010,7 +1010,7 @@
   align-items: center;
   overflow: hidden; /* keep inside the grid cell */
 
-  /* ✅ FIX: keep stable width so it never collapses and never "pushes" visually over EASING */
+  /* FIX: keep stable width so it never collapses and never "pushes" visually over EASING */
   width: var(--steps-actions-width);
   min-width: var(--steps-actions-width);
 }
