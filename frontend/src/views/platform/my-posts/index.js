@@ -1,4 +1,4 @@
-// ===== My Posts Page (PREVIEW ONLY: NO MODAL, NO COMMENTS, NO LIKE/DISLIKE) =====
+// ===== My Posts Page (PREVIEW ONLY: NO POST MODAL, NO COMMENTS, LIKE/DISLIKE READ-ONLY) =====
 
 // mock current user (връзваш по-късно към auth)
 const CURRENT_USER = { name: 'Вие', initials: 'Аз' };
@@ -10,20 +10,23 @@ const MY_POSTS = [
     user: CURRENT_USER,
     time: 'преди 1 час',
     text: 'Днес направих нов micro-interaction за hover state с SVG. Използвах easing и малък overshoot — супер гладко става!',
-    tags: ['microinteractions', 'svg', 'ui', 'easing']
+    tags: ['microinteractions', 'svg', 'ui', 'easing'],
+    likes: 12,
+    dislikes: 1
   },
   {
     id: 102,
     user: CURRENT_USER,
     time: 'вчера',
     text: 'Пускам кратък breakdown как правя path morph без да се “къса” формата. Най-важното е да имаш приблизително еднакъв брой сегменти и да нормализираш командите.',
-    tags: ['pathmorph', 'svg', 'frontend', 'tips']
+    tags: ['pathmorph', 'svg', 'frontend', 'tips'],
+    likes: 28,
+    dislikes: 0
   }
 ];
 
 /* =========================
-   Inline ConfirmationModal
-   (копие на логиката от my-projects)
+   Inline ConfirmationModal (като в my-projects)
 ========================= */
 function initConfirmationModal() {
   const overlay = document.getElementById("confirmModalOverlay");
@@ -155,11 +158,7 @@ function renderPost(post) {
       <div class="post-content">
         <p class="post-text ${showMore ? 'preview' : ''}">${post.text}</p>
 
-        ${showMore ? `
-          <div class="post-hint">
-            (Съкратен преглед)
-          </div>
-        ` : ``}
+        ${showMore ? `<div class="post-hint">(Съкратен преглед)</div>` : ``}
 
         ${renderTags(post.tags)}
 
@@ -174,6 +173,21 @@ function renderPost(post) {
       </div>
 
       <div class="post-actions">
+        <!-- ✅ Read-only reactions -->
+        <button class="action-btn readonly" type="button" disabled aria-disabled="true" title="Само за преглед">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="count">${Number(post.likes) || 0}</span>
+        </button>
+
+        <button class="action-btn readonly" type="button" disabled aria-disabled="true" title="Само за преглед">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="transform: rotate(180deg)" aria-hidden="true">
+            <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="count">${Number(post.dislikes) || 0}</span>
+        </button>
+
         <span class="action-spacer"></span>
 
         <button class="delete-btn" data-action="delete-post" data-post-id="${post.id}" aria-label="Изтрий анимация">
@@ -203,7 +217,6 @@ async function deletePostWithConfirmation(postId) {
   let ok = false;
 
   if (!window.ConfirmationModal?.open) {
-    // fallback
     ok = window.confirm("Сигурен ли си, че искаш да изтриеш тази анимация?");
   } else {
     ok = await window.ConfirmationModal.open({
@@ -229,7 +242,7 @@ async function deletePostWithConfirmation(postId) {
 function initEvents() {
   const feed = document.getElementById('feedContainer');
 
-  // важно: реагира САМО на data-action, няма open на card/media
+  // реагира само на data-action (delete). Like/dislike са disabled и нямат data-action.
   feed.addEventListener('click', (e) => {
     const actionBtn = e.target.closest('[data-action]');
     if (!actionBtn) return;
