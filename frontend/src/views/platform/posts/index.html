@@ -45,21 +45,25 @@
     </div>
 
     <div class="feed-container" id="feedContainer"></div>
-  </main>
 
-  <!-- Post Modal -->
-  <div class="post-modal" id="postModal" aria-hidden="true">
-    <div class="post-modal__backdrop" data-action="close-modal"></div>
-
-    <div class="post-modal__panel" role="dialog" aria-modal="true" aria-label="Преглед на публикация">
-      <div class="post-modal__content" id="postModalContent"></div>
+    <!-- Empty -->
+    <div class="feed-empty" id="feedEmpty" style="display:none;">
+      Няма публикации за показване
     </div>
-  </div>
+
+    <!-- Loader -->
+    <div class="feed-loader" id="feedLoader" style="display:none;">
+      Зареждане...
+    </div>
+
+    <!-- Sentinel for infinite scroll -->
+    <div id="feedSentinel" style="height: 1px;"></div>
+  </main>
 
   <!-- Scripts -->
   <script src="/svganimator/frontend/src/utils/auth-guard.js" type="module"></script>
 
   <script src="/svganimator/frontend/src/components/Navbar/index.js" type="module"></script>
-  <script src="/svganimator/frontend/src/views/platform/posts/index.js"></script>
+  <script src="/svganimator/frontend/src/views/platform/posts/index.js" type="module"></script>
 </body>
 </html>
