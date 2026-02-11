@@ -1,137 +1,277 @@
-// ===== Posts Feed =====
+import { getAllPostsRequest } from "/svganimator/frontend/src/services/posts.js";
 
-const PLACEHOLDER_POSTS = [
-  {
-    id: 1,
-    user: { name: 'Иван Петров', initials: 'ИП' },
-    time: 'преди 2 часа',
-    text: 'Току-що завърших нова SVG анимация за лендинг страница. Много съм доволен от резултата!',
-    tags: ['svganimation', 'landingpage', 'ui', 'motion'],
-    likes: 24,
-    dislikes: 2,
-    comments: [
-      { id: 1, author: 'Мария К.', initials: 'МК', text: 'Страхотна работа! Можеш ли да споделиш как направи ефекта на вълните?', time: 'преди 1 час' },
-      { id: 2, author: 'Георги Д.', initials: 'ГД', text: 'Много впечатляващо, браво!', time: 'преди 45 мин' }
-    ]
-  },
-  {
-    id: 2,
-    user: { name: 'Елена Димитрова', initials: 'ЕД' },
-    time: 'преди 5 часа',
-    text: 'Някой има ли опит с анимиране на SVG path morph? Опитвам се да направя плавен преход между две форми, но не мога да намеря добър подход. Също се чудя как най-добре да синхронизирам ключови кадри между различни path-ове и дали има оптимален начин да го направя без да се натоварва рендъра в браузъра.',
-    tags: ['svg', 'pathmorph', 'flubber', 'frontend'],
-    likes: 8,
-    dislikes: 0,
-    comments: [
-      { id: 3, author: 'Стефан М.', initials: 'СМ', text: 'Пробвай с flubber библиотеката, генерира добри интерполации между path-ове.', time: 'преди 3 часа' }
-    ]
-  },
-  {
-    id: 3,
-    user: { name: 'Александър Стоянов', initials: 'АС' },
-    time: 'преди 1 ден',
-    text: 'Споделям моя нов проект - интерактивна SVG карта с анимирани маршрути. Работих по нея цяла седмица.',
-    tags: ['interactive', 'svgmap', 'routes', 'project'],
-    likes: 56,
-    dislikes: 1,
-    comments: []
-  },
-  {
-    id: 4,
-    user: { name: 'Десислава Йорданова', initials: 'ДЙ' },
-    time: 'преди 2 дни',
-    text: 'Ново в общността! Радвам се да открия това място. Работя основно с micro-анимации за UI елементи. Имам няколко готини трика за easing функции и “overshoot” ефекти, които ще споделя скоро.',
-    tags: ['microinteractions', 'easing', 'ui', 'community'],
-    likes: 32,
-    dislikes: 0,
-    comments: [
-      { id: 4, author: 'Иван П.', initials: 'ИП', text: 'Добре дошла! Тук ще намериш много полезни ресурси.', time: 'преди 1 ден' },
-      { id: 5, author: 'Николай В.', initials: 'НВ', text: 'Привет! Ако имаш въпроси, питай спокойно.', time: 'преди 1 ден' },
-      { id: 6, author: 'Мария К.', initials: 'МК', text: 'Micro-анимациите са страхотна тема, ще се радвам да видя работата ти!', time: 'преди 22 часа' }
-    ]
+/* =========================
+   Utils
+========================= */
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function sanitizeSvg(svgText) {
+  if (!svgText || typeof svgText !== "string") return "";
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, "image/svg+xml");
+  const svg = doc.querySelector("svg");
+  if (!svg) return "";
+
+  // remove dangerous nodes
+  doc.querySelectorAll("script, foreignObject").forEach((n) => n.remove());
+
+  // remove inline event handlers + javascript: hrefs
+  doc.querySelectorAll("*").forEach((el) => {
+    [...el.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const value = String(attr.value || "").trim().toLowerCase();
+
+      if (name.startsWith("on")) el.removeAttribute(attr.name);
+
+      if ((name === "href" || name === "xlink:href") && value.startsWith("javascript:")) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  // ensure viewBox if missing
+  if (!svg.getAttribute("viewBox")) {
+    const w = svg.getAttribute("width");
+    const h = svg.getAttribute("height");
+    const wNum = w ? parseFloat(w) : NaN;
+    const hNum = h ? parseFloat(h) : NaN;
+    if (Number.isFinite(wNum) && Number.isFinite(hNum)) {
+      svg.setAttribute("viewBox", `0 0 ${wNum} ${hNum}`);
+    }
   }
-];
 
-// ===== State =====
-const postStates = {};
-let openPostId = null;
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  return svg.outerHTML;
+}
 
-// mock current user (по-късно го връзваш към auth)
-const CURRENT_USER = { name: 'Вие', initials: 'Аз' };
+function formatDateBg(createdAt) {
+  if (!createdAt) return "—";
+  const d = new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("bg-BG", { year: "numeric", month: "long", day: "numeric" });
+}
 
-function initPostStates() {
-  PLACEHOLDER_POSTS.forEach(post => {
-    postStates[post.id] = {
+function getInitials(name) {
+  const n = String(name || "").trim();
+  if (!n) return "??";
+  const parts = n.split(/\s+/).filter(Boolean);
+  const a = (parts[0]?.[0] || "?").toUpperCase();
+  const b = (parts[1]?.[0] || parts[0]?.[1] || "?").toUpperCase();
+  return `${a}${b}`;
+}
+
+function pickSvgFromApi(raw) {
+  const candidates = [
+    raw?.svg_text,
+    raw?.svg,
+    raw?.starting_svg,
+    raw?.animation_svg,
+    raw?.animation?.starting_svg,
+    raw?.animation?.svg_text,
+    raw?.animation?.svg,
+    raw?.animation?.starting_svg,
+  ];
+
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim().startsWith("<svg")) return c;
+  }
+  return "";
+}
+
+function mapApiPost(raw) {
+  const id = raw?.id ?? raw?.post_id ?? raw?.post?.id ?? raw?.post?.post_id;
+
+  const description =
+    raw?.description ??
+    raw?.text ??
+    raw?.post?.description ??
+    raw?.post?.text ??
+    "";
+
+  const createdAt =
+    raw?.created_at ??
+    raw?.createdAt ??
+    raw?.post?.created_at ??
+    raw?.post?.createdAt ??
+    null;
+
+  const likes = Number(
+    raw?.likes_count ??
+      raw?.likes ??
+      raw?.post?.likes_count ??
+      raw?.post?.likes ??
+      0
+  ) || 0;
+
+  const dislikes = Number(
+    raw?.dislikes_count ??
+      raw?.dislikes ??
+      raw?.post?.dislikes_count ??
+      raw?.post?.dislikes ??
+      0
+  ) || 0;
+
+  const userName =
+    raw?.user?.name ??
+    raw?.author?.name ??
+    raw?.username ??
+    raw?.post?.user?.name ??
+    (raw?.user_id ? `User #${raw.user_id}` : "Потребител");
+
+  const anim = raw?.animation || raw?.post?.animation || null;
+
+  const svgText = pickSvgFromApi(raw) || anim?.starting_svg || "";
+  const svgPreview = sanitizeSvg(svgText);
+
+  const animationSegments =
+    (Array.isArray(anim?.animation_segments) && anim.animation_segments) ||
+    (Array.isArray(anim?.segments) && anim.segments) ||
+    [];
+
+  const animationSettings =
+    anim?.animation_settings ??
+    anim?.settings ??
+    null;
+
+  return {
+    id: Number(id),
+    userName,
+    userInitials: getInitials(userName),
+    description: String(description || ""),
+    createdAt,
+    likes,
+    dislikes,
+    svgPreview,
+
+    animationName: String(anim?.name || ""),
+    animationSegments,
+    animationSettings,
+  };
+}
+
+/* =========================
+   State
+========================= */
+const state = {
+  posts: [],
+  visiblePosts: [],
+  postIds: new Set(),
+
+  currentPostId: null, // първо зареждане => без параметър
+  loading: false,
+  hasMore: true,
+
+  searchText: "",
+  searchTimer: null,
+
+  reactions: {}, // local UI only
+};
+
+/* =========================
+   DOM helpers
+========================= */
+function el(id) {
+  return document.getElementById(id);
+}
+
+function setLoader(isLoading) {
+  const loader = el("feedLoader");
+  if (!loader) return;
+  loader.style.display = isLoading ? "flex" : "none";
+}
+
+function setEmpty(isEmpty) {
+  const empty = el("feedEmpty");
+  if (!empty) return;
+  empty.style.display = isEmpty ? "block" : "none";
+}
+
+/* =========================
+   Rendering
+========================= */
+function ensureReactionState(post) {
+  if (!state.reactions[post.id]) {
+    state.reactions[post.id] = {
       liked: false,
       disliked: false,
       likes: post.likes,
-      dislikes: post.dislikes
+      dislikes: post.dislikes,
     };
-  });
+  }
+  return state.reactions[post.id];
 }
 
-function getPostById(id) {
-  return PLACEHOLDER_POSTS.find(p => p.id === id);
-}
-
-function shouldShowMore(text, limit = 180) {
-  return (text || '').length > limit;
-}
-
-function normalizeTags(tags) {
-  if (!Array.isArray(tags)) return [];
-  return tags
-    .map(t => String(t).trim())
-    .filter(Boolean)
-    .map(t => t.startsWith('#') ? t.slice(1) : t)
-    .map(t => t.replace(/\s+/g, ''))
-    .slice(0, 8);
-}
-
-function renderTags(tags) {
-  const list = normalizeTags(tags);
-  if (list.length === 0) return '';
-
-  return `
-    <div class="post-tags">
-      ${list.map(t => `
-        <span class="tag-chip" data-action="noop">
-          <span class="hash">#</span>${t}
-        </span>
-      `).join('')}
-    </div>
-  `;
-}
-
-function formatNowTime() {
-  // прост mock: "току-що"
-  return 'току-що';
-}
-
-function nextCommentId() {
-  let maxId = 0;
-  PLACEHOLDER_POSTS.forEach(p => p.comments.forEach(c => { if (c.id > maxId) maxId = c.id; }));
-  return maxId + 1;
-}
-
-// ===== Feed render =====
 function renderFeed() {
-  const container = document.getElementById('feedContainer');
-  container.innerHTML = PLACEHOLDER_POSTS.map(post => renderPost(post)).join('');
+  // важно: като правим innerHTML re-render, спираме всички "видеа" за да няма висящи RAF-и
+  stopAllPlayers(true);
+
+  const container = el("feedContainer");
+  if (!container) return;
+
+  const list = state.visiblePosts;
+  setEmpty(list.length === 0 && !state.loading);
+
+  container.innerHTML = list.map((post, idx) => renderPostCard(post, idx)).join("");
+
+  // след re-render – инициализираме player-ите за видимите постове
+  hydrateVideoPlayers();
 }
 
-function renderPost(post) {
-  const s = postStates[post.id];
-  const commentCount = post.comments.length;
-  const showMore = shouldShowMore(post.text);
+function renderPostCard(post, index) {
+  const r = ensureReactionState(post);
+  const dateLabel = formatDateBg(post.createdAt);
+
+  const hasVideo = Array.isArray(post.animationSegments) && post.animationSegments.length > 0;
+
+  const svgHtml = post.svgPreview
+    ? `
+      <div class="post-video" data-video-root data-post-id="${post.id}">
+        <div class="post-video-stage" data-video-stage>
+          <div class="post-svg">${post.svgPreview}</div>
+        </div>
+
+        <button
+          class="post-video-play"
+          type="button"
+          data-action="toggle-video"
+          data-post-id="${post.id}"
+          ${hasVideo ? "" : "disabled"}
+          aria-label="${hasVideo ? "Пусни/Спри" : "Няма анимация"}"
+          title="${hasVideo ? "Play / Pause" : "Няма сегменти"}"
+        >
+          <svg class="icon-play" width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18V6L19 12L9 18Z" fill="currentColor"/>
+          </svg>
+          <svg class="icon-pause" width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M7 6H10V18H7V6ZM14 6H17V18H14V6Z" fill="currentColor"/>
+          </svg>
+        </button>
+
+        <div class="post-video-hud">
+          <div class="post-video-time" data-video-time>0:00 / 0:00</div>
+          <div class="post-video-progress">
+            <div class="post-video-progress-fill" data-video-progress></div>
+          </div>
+        </div>
+      </div>
+    `
+    : `<div class="post-media-fallback">Няма SVG</div>`;
 
   return `
-    <article class="post-card" data-post-id="${post.id}">
+    <article class="post-card" data-post-id="${post.id}" style="animation-delay:${Math.min(index * 0.05, 0.4)}s">
       <div class="post-header">
-        <div class="post-avatar">${post.user.initials}</div>
+        <div class="post-avatar">${escapeHtml(post.userInitials)}</div>
         <div class="post-user-info">
-          <span class="post-username">${post.user.name}</span>
-          <span class="post-time">${post.time}</span>
+          <span class="post-username">${escapeHtml(post.userName)}</span>
+          <span class="post-time">${escapeHtml(dateLabel)}</span>
         </div>
         <button class="post-menu-btn" aria-label="Повече опции" data-action="noop">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -143,382 +283,938 @@ function renderPost(post) {
       </div>
 
       <div class="post-content">
-        <p class="post-text ${showMore ? 'preview' : ''}">${post.text}</p>
-
-        ${showMore ? `
-          <button class="post-more" data-action="open-post" data-post-id="${post.id}">
-            Вижте повече
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        ` : ``}
-
-        ${renderTags(post.tags)}
+        <p class="post-text">${escapeHtml(post.description)}</p>
 
         <div class="post-media">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M21 15L16 10L5 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Placeholder
+          ${svgHtml}
         </div>
       </div>
 
       <div class="post-actions">
-        <button class="action-btn ${s.liked ? 'liked' : ''}" data-action="like" data-post-id="${post.id}">
+        <button class="action-btn ${r.liked ? "liked" : ""}" data-action="like" data-post-id="${post.id}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="count">${s.likes}</span>
+          <span class="count">${r.likes}</span>
         </button>
 
-        <button class="action-btn ${s.disliked ? 'disliked' : ''}" data-action="dislike" data-post-id="${post.id}">
+        <button class="action-btn ${r.disliked ? "disliked" : ""}" data-action="dislike" data-post-id="${post.id}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="transform: rotate(180deg)">
             <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="count">${s.dislikes}</span>
+          <span class="count">${r.dislikes}</span>
         </button>
 
         <span class="action-spacer"></span>
-
-        <button class="action-btn comment-toggle" data-action="open-comments" data-post-id="${post.id}">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="count">${commentCount}</span>
-        </button>
-      </div>
-
-      <div class="post-divider"></div>
-
-      <div class="comments-section disabled" id="comments-${post.id}">
-        <div class="comments-inner">
-          <div class="no-comments">Коментарите се отварят в попъп</div>
-        </div>
       </div>
     </article>
   `;
 }
 
-// ===== Modal =====
-function openModal(postId, focus = 'post') {
-  const post = getPostById(postId);
-  if (!post) return;
-
-  openPostId = postId;
-
-  const modal = document.getElementById('postModal');
-  const content = document.getElementById('postModalContent');
-
-  content.innerHTML = renderModal(post);
-
-  modal.classList.add('open');
-  modal.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-
-  // Focus the input by default for comments view
-  if (focus === 'comments') {
-    const right = content.querySelector('.modal-right');
-    if (right) {
-      right.classList.add('flash');
-      const anchor = content.querySelector('#modal-comments-anchor');
-      if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(() => right.classList.remove('flash'), 900);
-    }
-    const input = content.querySelector('.comment-input');
-    if (input) input.focus();
-  }
-}
-
-function closeModal() {
-  const modal = document.getElementById('postModal');
-  const content = document.getElementById('postModalContent');
-
-  openPostId = null;
-
-  modal.classList.remove('open');
-  modal.setAttribute('aria-hidden', 'true');
-  content.innerHTML = '';
-  document.body.style.overflow = '';
-}
-
-function renderModal(post) {
-  const s = postStates[post.id];
-  const commentCount = post.comments.length;
-
-  return `
-    <div class="modal-left">
-      <div class="modal-top">
-        <div class="post-header" style="padding:0;">
-          <div class="post-avatar">${post.user.initials}</div>
-          <div class="post-user-info">
-            <span class="post-username">${post.user.name}</span>
-            <span class="post-time">${post.time}</span>
-          </div>
-        </div>
-
-        <button class="modal-close" data-action="close-modal" aria-label="Затвори">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <path d="M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-
-      <p class="modal-post-text">${post.text}</p>
-      ${renderTags(post.tags)}
-
-      <div class="post-media" style="margin-bottom:0;">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M21 15L16 10L5 21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Placeholder
-      </div>
-    </div>
-
-    <aside class="modal-right">
-      <div class="modal-section-title">Реакции</div>
-
-      <div class="modal-actions">
-        <button class="action-btn ${s.liked ? 'liked' : ''}" data-action="like" data-post-id="${post.id}">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="count">${s.likes}</span>
-        </button>
-
-        <button class="action-btn ${s.disliked ? 'disliked' : ''}" data-action="dislike" data-post-id="${post.id}">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="transform: rotate(180deg)">
-            <path d="M7 22V11L2 13V22H7ZM7 11L11.5 2C12.3284 2 13.1235 2.32924 13.7097 2.91536C14.2959 3.50148 14.625 4.29653 14.625 5.125V8.5H20.25C20.5955 8.49743 20.9376 8.56898 21.2534 8.71002C21.5693 8.85106 21.8517 9.05833 22.0816 9.31756C22.3115 9.5768 22.4836 9.88211 22.5862 10.2131C22.6887 10.5441 22.7193 10.8933 22.6757 11.237L21.4632 20.237C21.3875 20.8357 21.0946 21.3857 20.6393 21.7877C20.184 22.1897 19.5975 22.4158 18.9882 22.425H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span class="count">${s.dislikes}</span>
-        </button>
-      </div>
-
-      <div id="modal-comments-anchor" class="modal-section-title">Коментари (${commentCount})</div>
-
-      <!-- ACTIVE comment input -->
-      <div class="comments-inner" style="padding:0;">
-        <div class="comment-input-wrapper" style="margin-bottom: 0.85rem;">
-          <div class="comment-avatar">${CURRENT_USER.initials}</div>
-          <input type="text"
-                 class="comment-input"
-                 placeholder="Напишете коментар..."
-                 data-post-id="${post.id}"
-                 data-action="comment-input">
-          <button class="comment-send-btn"
-                  data-action="send-comment"
-                  data-post-id="${post.id}"
-                  aria-label="Изпрати коментар">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-
-        ${commentCount > 0 ? `
-          <div class="comments-list" style="max-height: 420px;" id="modal-comments-list">
-            ${post.comments.map(c => `
-              <div class="comment-item">
-                <div class="comment-avatar">${c.initials}</div>
-                <div class="comment-body">
-                  <div>
-                    <span class="comment-author">${c.author}</span>
-                    <span class="comment-text">${c.text}</span>
-                  </div>
-                  <div class="comment-meta">
-                    <span>${c.time}</span>
-                    <button data-action="noop">Отговори</button>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        ` : `
-          <div class="no-comments" id="modal-no-comments">Все още няма коментари</div>
-          <div class="comments-list" style="max-height: 420px; display:none;" id="modal-comments-list"></div>
-        `}
-      </div>
-    </aside>
-  `;
-}
-
-function rerenderModalIfOpen() {
-  if (!openPostId) return;
-  const post = getPostById(openPostId);
-  if (!post) return;
-  document.getElementById('postModalContent').innerHTML = renderModal(post);
-}
-
-function scrollCommentsToBottom() {
-  const list = document.getElementById('modal-comments-list');
-  if (!list) return;
-  list.scrollTop = list.scrollHeight;
-}
-
-// ===== Events =====
-function initEvents() {
-  const feed = document.getElementById('feedContainer');
-
-  // Click anywhere on post opens modal (unless action button clicked)
-  feed.addEventListener('click', (e) => {
-    const actionBtn = e.target.closest('[data-action]');
-    if (actionBtn) {
-      handleAction(actionBtn);
-      return;
-    }
-
-    const card = e.target.closest('.post-card');
-    if (card) {
-      const postId = parseInt(card.dataset.postId);
-      openModal(postId, 'post');
-    }
-  });
-
-  // Modal delegation for buttons
-  document.getElementById('postModal').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    handleAction(btn);
-  });
-
-  // Modal: Enter to send comment
-  document.getElementById('postModal').addEventListener('keydown', (e) => {
-    const input = e.target.closest('.comment-input');
-    if (!input) return;
-
-    if (e.key === 'Enter') {
-      const postId = parseInt(input.dataset.postId);
-      sendComment(postId, input.value);
-    }
-  });
-
-  // ESC close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeModal();
-  });
-}
-
-function handleAction(btn) {
-  const action = btn.dataset.action;
-
-  if (action === 'close-modal') {
-    closeModal();
+/* =========================
+   Search
+========================= */
+function applySearch() {
+  const q = state.searchText.trim().toLowerCase();
+  if (!q) {
+    state.visiblePosts = [...state.posts];
+    renderFeed();
     return;
   }
 
-  if (action === 'noop') return;
+  state.visiblePosts = state.posts.filter((p) => {
+    const t = (p.description || "").toLowerCase();
+    const u = (p.userName || "").toLowerCase();
+    return t.includes(q) || u.includes(q);
+  });
 
-  const postId = btn.dataset.postId ? parseInt(btn.dataset.postId) : null;
-  const s = postId ? postStates[postId] : null;
+  renderFeed();
+}
 
-  switch (action) {
-    case 'open-post': {
-      if (!postId) return;
-      openModal(postId, 'post');
-      return;
+function initSearch() {
+  const input = el("searchInput");
+  if (!input) return;
+
+  input.addEventListener("input", (e) => {
+    const value = String(e.target.value || "");
+    state.searchText = value;
+
+    if (state.searchTimer) clearTimeout(state.searchTimer);
+    state.searchTimer = setTimeout(() => {
+      applySearch();
+    }, 150);
+  });
+}
+
+/* =========================
+   Infinite scroll
+========================= */
+async function loadMorePosts() {
+  if (state.loading || !state.hasMore) return;
+
+  state.loading = true;
+  setLoader(true);
+
+  const res = await getAllPostsRequest({ currentPostId: state.currentPostId });
+
+  state.loading = false;
+  setLoader(false);
+
+  if (!res || res.success !== true) {
+    console.error("[posts] load error:", res);
+    state.hasMore = false;
+    applySearch();
+    return;
+  }
+
+  const rawList =
+    (Array.isArray(res.nextPosts) && res.nextPosts) ||
+    (Array.isArray(res.posts) && res.posts) ||
+    (Array.isArray(res.data?.nextPosts) && res.data.nextPosts) ||
+    (Array.isArray(res.data?.posts) && res.data.posts) ||
+    (Array.isArray(res.data) && res.data) ||
+    [];
+
+  const mapped = rawList.map(mapApiPost).filter((p) => Number.isFinite(p.id));
+
+  let added = 0;
+  for (const p of mapped) {
+    if (state.postIds.has(p.id)) continue;
+    state.postIds.add(p.id);
+    state.posts.push(p);
+    ensureReactionState(p);
+    added++;
+  }
+
+  if (state.posts.length > 0) {
+    state.currentPostId = state.posts[state.posts.length - 1].id;
+  }
+
+  if (added === 0) state.hasMore = false;
+
+  applySearch();
+}
+
+function initInfiniteScroll() {
+  const sentinel = el("feedSentinel");
+  if (!sentinel) return;
+
+  const io = new IntersectionObserver(
+    async (entries) => {
+      const entry = entries[0];
+      if (entry && entry.isIntersecting) {
+        await loadMorePosts();
+      }
+    },
+    { root: null, rootMargin: "600px 0px", threshold: 0.01 }
+  );
+
+  io.observe(sentinel);
+}
+
+/* =========================
+   Reactions (local only)
+========================= */
+function toggleLike(postId) {
+  const r = state.reactions[postId];
+  if (!r) return;
+
+  if (r.liked) {
+    r.liked = false;
+    r.likes = Math.max(0, r.likes - 1);
+  } else {
+    r.liked = true;
+    r.likes += 1;
+    if (r.disliked) {
+      r.disliked = false;
+      r.dislikes = Math.max(0, r.dislikes - 1);
     }
+  }
 
-    case 'open-comments': {
-      if (!postId) return;
-      openModal(postId, 'comments');
-      return;
+  renderFeed();
+}
+
+function toggleDislike(postId) {
+  const r = state.reactions[postId];
+  if (!r) return;
+
+  if (r.disliked) {
+    r.disliked = false;
+    r.dislikes = Math.max(0, r.dislikes - 1);
+  } else {
+    r.disliked = true;
+    r.dislikes += 1;
+    if (r.liked) {
+      r.liked = false;
+      r.likes = Math.max(0, r.likes - 1);
     }
+  }
 
-    case 'send-comment': {
-      if (!postId) return;
-      const input = document.querySelector('#postModalContent .comment-input');
-      if (!input) return;
-      sendComment(postId, input.value);
-      return;
+  renderFeed();
+}
+
+/* =========================
+   Post "Video" Players
+========================= */
+
+const players = new Map(); // postId -> controller
+const PLAYER_DEFAULT_FPS = 30;
+
+function safeParseJson(str) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+function formatTime(seconds) {
+  const s = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(s / 60);
+  const secs = Math.floor(s % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+/* ======= SVG value helpers (editor-like) ======= */
+function ensurePxIfLength(propName, value) {
+  if (value === null || value === undefined) return "";
+  const s = String(value).trim();
+  if (!s) return "";
+
+  if (propName !== "stroke-width" && propName !== "font-size") return s;
+
+  // already has unit
+  if (/^-?\d+(\.\d+)?[a-z%]+$/i.test(s)) return s;
+
+  // pure number => px
+  if (/^-?\d+(\.\d+)?$/.test(s)) return `${s}px`;
+
+  return s;
+}
+
+function parseCssColorToHex(value) {
+  if (!value) return "";
+  const v = String(value).trim();
+
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) return v;
+  if (/^#[0-9A-Fa-f]{3}$/.test(v)) {
+    const r = v[1], g = v[2], b = v[3];
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+
+  const rgbMatch = v.match(
+    /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)(?:\s*,\s*([0-9.]+))?\s*\)$/i
+  );
+  if (rgbMatch) {
+    const r = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[1]))));
+    const g = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[2]))));
+    const b = Math.max(0, Math.min(255, Math.round(parseFloat(rgbMatch[3]))));
+    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+  }
+
+  // try named colors by browser normalization
+  const test = document.createElement("span");
+  test.style.color = "";
+  test.style.color = v;
+  if (test.style.color) {
+    document.body.appendChild(test);
+    const cs = getComputedStyle(test).color;
+    test.remove();
+    const m = cs.match(/^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i);
+    if (m) {
+      const rr = Math.max(0, Math.min(255, Math.round(parseFloat(m[1]))));
+      const gg = Math.max(0, Math.min(255, Math.round(parseFloat(m[2]))));
+      const bb = Math.max(0, Math.min(255, Math.round(parseFloat(m[3]))));
+      return `#${rr.toString(16).padStart(2, "0")}${gg.toString(16).padStart(2, "0")}${bb.toString(16).padStart(2, "0")}`;
     }
+  }
 
-    case 'like': {
-      if (!s) return;
-      if (s.liked) {
-        s.liked = false;
-        s.likes--;
-      } else {
-        s.liked = true;
-        s.likes++;
-        if (s.disliked) {
-          s.disliked = false;
-          s.dislikes--;
+  return "";
+}
+
+function resolvePaintUrlToHex(svgRoot, urlValue) {
+  const m = String(urlValue || "").match(/^url\(\s*#([^)]+)\s*\)$/i);
+  if (!m) return "";
+
+  const id = m[1];
+  let defsEl = null;
+  try {
+    defsEl = svgRoot.querySelector(`#${CSS.escape(id)}`);
+  } catch {
+    defsEl = null;
+  }
+  if (!defsEl) return "";
+
+  const tag = defsEl.tagName ? defsEl.tagName.toLowerCase() : "";
+  if (tag.includes("gradient")) {
+    const stop = defsEl.querySelector("stop");
+    const stopColor = stop?.getAttribute("stop-color") || stop?.style?.stopColor || "";
+    const hex = parseCssColorToHex(stopColor);
+    if (hex) return hex;
+  }
+
+  return "";
+}
+
+function setSvgProperty(element, property, value) {
+  if (!element) return;
+  const v = value == null ? "" : String(value);
+
+  try {
+    element.setAttribute(property, v);
+  } catch {
+    // ignore
+  }
+
+  const styleable = new Set(["opacity", "fill", "stroke", "stroke-width", "font-size"]);
+  if (element.style && typeof element.style.setProperty === "function" && styleable.has(property)) {
+    element.style.setProperty(property, v);
+  }
+}
+
+function getStyleAttrValue(element, propName) {
+  const styleAttr = element?.getAttribute?.("style");
+  if (!styleAttr) return "";
+  const parts = String(styleAttr).split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.split(":");
+    if (!k || !rest.length) continue;
+    if (k.trim().toLowerCase() === propName.toLowerCase()) {
+      return rest.join(":").trim();
+    }
+  }
+  return "";
+}
+
+function getFallbackDefaultForProp(propName) {
+  if (propName === "stroke-width") return "1px";
+  if (propName === "font-size") return "16px";
+  if (propName === "opacity") return "1";
+  return "";
+}
+
+function getResolvedValue(svgRoot, element, propName) {
+  if (!element) return "";
+
+  // 1) attribute
+  let currentValue = element.getAttribute(propName);
+
+  // 2) inline style via CSSStyleDeclaration
+  if (!currentValue || String(currentValue).trim() === "") {
+    const inline = element.style?.getPropertyValue?.(propName);
+    if (inline && inline.trim()) currentValue = inline.trim();
+  }
+
+  // 2.5) raw style=""
+  if (!currentValue || String(currentValue).trim() === "") {
+    const raw = getStyleAttrValue(element, propName);
+    if (raw) currentValue = raw;
+  }
+
+  // 3) computed style
+  if (!currentValue || String(currentValue).trim() === "") {
+    const cs = window.getComputedStyle(element);
+    let v = cs.getPropertyValue(propName);
+    if (v && typeof v === "string") v = v.trim();
+    if (!v) {
+      const camel = propName.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      v = (cs[camel] || "").toString().trim();
+    }
+    currentValue = v || "";
+  }
+
+  // 4) fallback defaults
+  if (!currentValue || String(currentValue).trim() === "") {
+    currentValue = getFallbackDefaultForProp(propName);
+  }
+
+  // resolve url(#id) paints
+  if (typeof currentValue === "string" && currentValue.trim().startsWith("url(")) {
+    const resolved = resolvePaintUrlToHex(svgRoot, currentValue.trim());
+    if (resolved) currentValue = resolved;
+  }
+
+  // ensure px for length props
+  currentValue = ensurePxIfLength(propName, currentValue);
+
+  return String(currentValue || "").trim();
+}
+
+function parseNumberWithUnit(v) {
+  const s = String(v ?? "").trim();
+  const m = s.match(/^(-?\d+(\.\d+)?)([a-z%]*)$/i);
+  if (!m) return null;
+  return { num: parseFloat(m[1]), unit: m[3] || "" };
+}
+
+function interpolateNumberWithUnit(from, to, progress) {
+  const a = parseNumberWithUnit(from);
+  const b = parseNumberWithUnit(to);
+  if (!a || !b) return null;
+  if (a.unit !== b.unit) return null;
+  const value = a.num + (b.num - a.num) * progress;
+  return `${value}${a.unit}`;
+}
+
+function interpolateColor(hex1, hex2, t) {
+  const c1 = hex1.replace("#", "");
+  const c2 = hex2.replace("#", "");
+
+  const r1 = parseInt(c1.slice(0, 2), 16);
+  const g1 = parseInt(c1.slice(2, 4), 16);
+  const b1 = parseInt(c1.slice(4, 6), 16);
+
+  const r2 = parseInt(c2.slice(0, 2), 16);
+  const g2 = parseInt(c2.slice(2, 4), 16);
+  const b2 = parseInt(c2.slice(4, 6), 16);
+
+  const r = Math.round(r1 + (r2 - r1) * t);
+  const g = Math.round(g1 + (g2 - g1) * t);
+  const b = Math.round(b1 + (b2 - b1) * t);
+
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+function cubicBezierYForX(x, p1x, p1y, p2x, p2y) {
+  const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+  const cx = 3 * p1x;
+  const bx = 3 * (p2x - p1x) - cx;
+  const ax = 1 - cx - bx;
+
+  const cy = 3 * p1y;
+  const by = 3 * (p2y - p1y) - cy;
+  const ay = 1 - cy - by;
+
+  const bezX = (t) => ((ax * t + bx) * t + cx) * t;
+  const bezXDer = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  const bezY = (t) => ((ay * t + by) * t + cy) * t;
+
+  let t = clamp01(x);
+  for (let i = 0; i < 6; i++) {
+    const x2 = bezX(t) - x;
+    const d = bezXDer(t);
+    if (Math.abs(x2) < 1e-6) break;
+    if (Math.abs(d) < 1e-6) break;
+    t = clamp01(t - x2 / d);
+  }
+  return clamp01(bezY(t));
+}
+
+function applyEasing(t, easing) {
+  const tt = Math.max(0, Math.min(1, t));
+  switch (easing) {
+    case "linear":
+      return tt;
+    case "ease":
+      return cubicBezierYForX(tt, 0.25, 0.1, 0.25, 1);
+    case "ease-in":
+      return cubicBezierYForX(tt, 0.42, 0, 1, 1);
+    case "ease-out":
+      return cubicBezierYForX(tt, 0, 0, 0.58, 1);
+    case "ease-in-out":
+      return cubicBezierYForX(tt, 0.42, 0, 0.58, 1);
+    default: {
+      const m = String(easing || "").match(
+        /^cubic-bezier\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)$/i
+      );
+      if (m) {
+        const p1x = parseFloat(m[1]);
+        const p1y = parseFloat(m[2]);
+        const p2x = parseFloat(m[3]);
+        const p2y = parseFloat(m[4]);
+        if ([p1x, p1y, p2x, p2y].every((n) => Number.isFinite(n))) {
+          return cubicBezierYForX(tt, p1x, p1y, p2x, p2y);
         }
       }
-      renderFeed();
-      rerenderModalIfOpen();
-      return;
-    }
-
-    case 'dislike': {
-      if (!s) return;
-      if (s.disliked) {
-        s.disliked = false;
-        s.dislikes--;
-      } else {
-        s.disliked = true;
-        s.dislikes++;
-        if (s.liked) {
-          s.liked = false;
-          s.likes--;
-        }
-      }
-      renderFeed();
-      rerenderModalIfOpen();
-      return;
+      return tt;
     }
   }
 }
 
-function sendComment(postId, rawText) {
-  const post = getPostById(postId);
-  if (!post) return;
+/* ======= UID mapping (като editor-а) ======= */
+function isAnimatableNode(node) {
+  if (!node || !node.tagName) return false;
+  const tag = node.tagName.toLowerCase();
 
-  const text = (rawText || '').trim();
-  if (!text) return;
+  // skip non-animatable/infrastructure tags
+  if (
+    tag === "svg" ||
+    tag === "defs" ||
+    tag === "style" ||
+    tag === "script" ||
+    tag === "title" ||
+    tag === "desc" ||
+    tag === "metadata" ||
+    tag === "lineargradient" ||
+    tag === "radialgradient" ||
+    tag === "stop" ||
+    tag === "clippath" ||
+    tag === "mask" ||
+    tag === "pattern" ||
+    tag === "filter" ||
+    tag === "symbol"
+  ) return false;
 
-  const newComment = {
-    id: nextCommentId(),
-    author: CURRENT_USER.name,
-    initials: CURRENT_USER.initials,
-    text,
-    time: formatNowTime()
+  // skip filter primitives fe*
+  if (tag.startsWith("fe")) return false;
+
+  return true;
+}
+
+function buildUidMap(svgRoot) {
+  const uidMap = new Map(); // uid -> element
+  let uid = 0;
+
+  const walk = (node) => {
+    if (!node || !node.children) return;
+
+    for (const ch of node.children) {
+      if (!ch || !ch.tagName) continue;
+
+      if (isAnimatableNode(ch)) {
+        uid += 1;
+        uidMap.set(uid, ch);
+      }
+
+      // important: always walk children, even if this node is not animatable
+      walk(ch);
+    }
   };
 
-  post.comments.push(newComment);
-
-  // Update UI
-  renderFeed();
-  rerenderModalIfOpen();
-
-  // Clear input and scroll
-  const input = document.querySelector('#postModalContent .comment-input');
-  if (input) {
-    input.value = '';
-    input.focus();
-  }
-
-  // If "no comments" existed, it gets replaced by rerender.
-  // Just scroll to bottom:
-  setTimeout(scrollCommentsToBottom, 0);
+  walk(svgRoot);
+  return uidMap;
 }
 
-// ===== Particle background =====
+/* ======= Settings (bg/viewBox) for preview ======= */
+function normalizeLoadedSettings(raw) {
+  const out = {
+    fps: PLAYER_DEFAULT_FPS,
+    useOriginalViewBox: true,
+    viewBox: null,
+    keepCentered: true,
+    canvasBgColor: "#0a0a12",
+    transparentBg: false,
+  };
+
+  if (!raw || typeof raw !== "object") return out;
+
+  if (Number.isFinite(Number(raw.fps))) out.fps = Math.max(1, Math.min(120, Number(raw.fps)));
+
+  if (typeof raw.useOriginalViewBox === "boolean") out.useOriginalViewBox = raw.useOriginalViewBox;
+
+  if (raw.viewBox && typeof raw.viewBox === "object") {
+    out.viewBox = {
+      minX: Number(raw.viewBox.minX ?? 0) || 0,
+      minY: Number(raw.viewBox.minY ?? 0) || 0,
+      width: Math.max(1, Number(raw.viewBox.width ?? 800) || 800),
+      height: Math.max(1, Number(raw.viewBox.height ?? 600) || 600),
+    };
+  }
+
+  if (typeof raw.keepCentered === "boolean") out.keepCentered = raw.keepCentered;
+
+  if (typeof raw.canvasBgColor === "string" && raw.canvasBgColor.trim()) {
+    out.canvasBgColor = raw.canvasBgColor.trim();
+  }
+
+  if (typeof raw.transparentBg === "boolean") out.transparentBg = raw.transparentBg;
+
+  return out;
+}
+
+function parseSettings(settingsStrOrObj) {
+  const parsed =
+    typeof settingsStrOrObj === "string"
+      ? safeParseJson(settingsStrOrObj)
+      : (typeof settingsStrOrObj === "object" ? settingsStrOrObj : null);
+
+  return normalizeLoadedSettings(parsed);
+}
+
+function applyPreviewSettings(svgRoot, stageEl, settings) {
+  if (!svgRoot) return;
+
+  // background
+  if (stageEl) {
+    if (settings.transparentBg) {
+      stageEl.style.background = "transparent";
+    } else {
+      stageEl.style.background = settings.canvasBgColor || "#0a0a12";
+    }
+  }
+
+  // viewBox override (ако useOriginalViewBox=false)
+  if (!settings.useOriginalViewBox && settings.viewBox) {
+    const vb = settings.viewBox;
+    svgRoot.setAttribute("viewBox", `${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`);
+  }
+
+  // keepCentered controls preserveAspectRatio alignment
+  svgRoot.setAttribute("preserveAspectRatio", settings.keepCentered ? "xMidYMid meet" : "xMinYMin meet");
+}
+
+/* ======= Segments normalize + chain fromValue ======= */
+function extractAnimPropertyAndToValue(seg) {
+  const animData =
+    typeof seg.animation_data === "string"
+      ? safeParseJson(seg.animation_data)
+      : (seg.animation_data || null);
+
+  if (!animData || typeof animData !== "object") return { property: null, toValue: null };
+
+  const keys = Object.keys(animData);
+  if (!keys.length) return { property: null, toValue: null };
+
+  const property = keys[0];
+  const toValue = animData[property];
+
+  return { property, toValue };
+}
+
+function normalizeSegmentsForPlayer(rawSegments, svgRoot) {
+  const segments = Array.isArray(rawSegments) ? rawSegments : [];
+  const uidMap = buildUidMap(svgRoot);
+
+  const parsed = [];
+
+  for (const seg of segments) {
+    const start = Number(seg.start_at ?? seg.startTime ?? 0) || 0;
+    const dur =
+      Number(seg.duration ?? 0) ||
+      Math.max(0, (Number(seg.end_at ?? 0) || 0) - start);
+
+    const easing = String(seg.easing || "linear");
+    const { property, toValue } = extractAnimPropertyAndToValue(seg);
+
+    if (!property) continue;
+
+    let targetEl = null;
+
+    // 1) selector
+    if (seg.element_selector && typeof seg.element_selector === "string") {
+      try {
+        targetEl = svgRoot.querySelector(seg.element_selector);
+      } catch {
+        targetEl = null;
+      }
+    }
+
+    // 2) uid mapping (element_id from backend)
+    if (!targetEl) {
+      const uid = Number(seg.element_id ?? seg.element_uid);
+      if (Number.isFinite(uid) && uidMap.has(uid)) {
+        targetEl = uidMap.get(uid);
+      }
+    }
+
+    if (!targetEl) continue;
+
+    const toNorm = ensurePxIfLength(property, String(toValue ?? ""));
+
+    parsed.push({
+      element: targetEl,
+      property,
+      toValue: toNorm,
+      startTime: Math.max(0, start),
+      duration: Math.max(0.001, dur),
+      easing,
+      fromValue: "", // will be filled
+    });
+  }
+
+  // chain fromValue per element+property by start order (без toString collisions)
+  const byEl = new Map(); // element -> Map(prop -> seg[])
+  for (const s of parsed) {
+    if (!byEl.has(s.element)) byEl.set(s.element, new Map());
+    const mp = byEl.get(s.element);
+    if (!mp.has(s.property)) mp.set(s.property, []);
+    mp.get(s.property).push(s);
+  }
+
+  for (const mp of byEl.values()) {
+    for (const arr of mp.values()) {
+      arr.sort((a, b) => a.startTime - b.startTime);
+      let prevTo = null;
+      for (const s of arr) {
+        const base = prevTo ?? getResolvedValue(svgRoot, s.element, s.property);
+        s.fromValue = ensurePxIfLength(s.property, String(base ?? ""));
+        prevTo = s.toValue;
+      }
+    }
+  }
+
+  return parsed;
+}
+
+function getFpsFromSettings(settings) {
+  const s = parseSettings(settings);
+  const fps = Number(s.fps);
+  if (Number.isFinite(fps) && fps > 0 && fps <= 120) return fps;
+  return PLAYER_DEFAULT_FPS;
+}
+
+function computeTotalDuration(segments) {
+  let maxEnd = 0;
+  for (const s of segments) {
+    const end = (Number(s.startTime) || 0) + (Number(s.duration) || 0);
+    if (end > maxEnd) maxEnd = end;
+  }
+  return Math.max(0, maxEnd);
+}
+
+function applySegmentsAtTime(svgRoot, segments, tSec) {
+  for (const seg of segments) {
+    const st = seg.startTime;
+    const en = st + seg.duration;
+
+    const from = seg.fromValue ?? "";
+    const to = seg.toValue ?? "";
+
+    if (tSec < st) {
+      setSvgProperty(seg.element, seg.property, from);
+      continue;
+    }
+
+    if (tSec >= en) {
+      setSvgProperty(seg.element, seg.property, to);
+      continue;
+    }
+
+    const progress = (tSec - st) / seg.duration;
+    const eased = applyEasing(progress, seg.easing);
+
+    // 1) number with unit
+    const numWU = interpolateNumberWithUnit(from, to, eased);
+    if (numWU !== null) {
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, numWU));
+      continue;
+    }
+
+    // 2) plain numeric
+    const fromNum = parseFloat(from);
+    const toNum = parseFloat(to);
+    const fromIsNum = !Number.isNaN(fromNum) && String(from).trim() !== "";
+    const toIsNum = !Number.isNaN(toNum) && String(to).trim() !== "";
+
+    if (fromIsNum && toIsNum) {
+      const v = fromNum + (toNum - fromNum) * eased;
+      setSvgProperty(seg.element, seg.property, ensurePxIfLength(seg.property, String(v)));
+      continue;
+    }
+
+    // 3) colors (+ url(#grad) resolve)
+    const fromHex = parseCssColorToHex(from) || resolvePaintUrlToHex(svgRoot, from) || "";
+    const toHex = parseCssColorToHex(to) || resolvePaintUrlToHex(svgRoot, to) || "";
+
+    if (fromHex && toHex) {
+      setSvgProperty(seg.element, seg.property, interpolateColor(fromHex, toHex, eased));
+      continue;
+    }
+
+    // 4) fallback (step)
+    setSvgProperty(seg.element, seg.property, eased < 0.5 ? from : to);
+  }
+}
+
+/* ======= Player creation ======= */
+function createPlayerForPost(post) {
+  const root = document.querySelector(`.post-video[data-post-id="${post.id}"]`);
+  if (!root) return null;
+
+  const stage = root.querySelector("[data-video-stage]");
+  const timeEl = root.querySelector("[data-video-time]");
+  const progressEl = root.querySelector("[data-video-progress]");
+  const playBtn = root.querySelector('[data-action="toggle-video"]');
+
+  const svg = stage?.querySelector("svg");
+  if (!svg) return null;
+
+  const settings = parseSettings(post.animationSettings);
+  applyPreviewSettings(svg, stage, settings);
+
+  const fps = getFpsFromSettings(settings);
+  const segs = normalizeSegmentsForPlayer(post.animationSegments, svg);
+  const totalDuration = computeTotalDuration(segs);
+  const totalFrames = Math.max(1, Math.ceil(totalDuration * fps));
+  const frameMs = 1000 / fps;
+
+  // set initial frame
+  applySegmentsAtTime(svg, segs, 0);
+
+  const ctrl = {
+    postId: post.id,
+    root,
+    playBtn,
+    timeEl,
+    progressEl,
+
+    svg,
+    segments: segs,
+    fps,
+    frameMs,
+    totalDuration,
+    totalFrames,
+
+    isPlaying: false,
+    rafId: null,
+    currentFrame: 0,
+    startTimeMs: 0,
+
+    updateHud() {
+      const t = this.currentFrame / this.fps;
+      if (this.timeEl) {
+        this.timeEl.textContent = `${formatTime(t)} / ${formatTime(this.totalDuration)}`;
+      }
+      if (this.progressEl) {
+        const p = this.totalFrames > 0 ? (this.currentFrame / this.totalFrames) : 0;
+        this.progressEl.style.width = `${Math.max(0, Math.min(100, p * 100))}%`;
+      }
+    },
+
+    tick(now) {
+      if (!this.isPlaying) return;
+
+      const elapsed = now - this.startTimeMs;
+      this.currentFrame = Math.floor(elapsed / this.frameMs);
+
+      if (this.currentFrame >= this.totalFrames) {
+        this.currentFrame = 0;
+        this.startTimeMs = now;
+      }
+
+      const t = this.currentFrame / this.fps;
+      applySegmentsAtTime(this.svg, this.segments, t);
+      this.updateHud();
+
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    play() {
+      if (!this.segments.length) return;
+      if (this.isPlaying) return;
+
+      // stop others
+      pauseAllExcept(this.postId);
+
+      this.isPlaying = true;
+      this.root.classList.add("is-playing");
+
+      this.startTimeMs = performance.now() - this.currentFrame * this.frameMs;
+      this.rafId = requestAnimationFrame((n) => this.tick(n));
+    },
+
+    pause() {
+      this.isPlaying = false;
+      this.root.classList.remove("is-playing");
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      this.updateHud();
+    },
+
+    toggle() {
+      if (this.isPlaying) this.pause();
+      else this.play();
+    },
+
+    destroy(reset = false) {
+      this.pause();
+      if (reset) {
+        this.currentFrame = 0;
+        applySegmentsAtTime(this.svg, this.segments, 0);
+        this.updateHud();
+      }
+    }
+  };
+
+  ctrl.updateHud();
+  return ctrl;
+}
+
+function hydrateVideoPlayers() {
+  const visibleIds = new Set(state.visiblePosts.map((p) => p.id));
+
+  // махаме контролери за постове, които вече не са рендернати
+  for (const [postId, ctrl] of players.entries()) {
+    if (!visibleIds.has(postId)) {
+      ctrl.destroy(false);
+      players.delete(postId);
+    }
+  }
+
+  for (const post of state.visiblePosts) {
+    if (!post.svgPreview) continue;
+
+    // ако вече има контролер – махаме го (DOM се е сменил)
+    if (players.has(post.id)) {
+      players.get(post.id).destroy(false);
+      players.delete(post.id);
+    }
+
+    const ctrl = createPlayerForPost(post);
+    if (ctrl) players.set(post.id, ctrl);
+  }
+}
+
+function pauseAllExcept(postId) {
+  for (const [id, ctrl] of players.entries()) {
+    if (id !== postId) ctrl.pause();
+  }
+}
+
+function stopAllPlayers(reset = false) {
+  for (const ctrl of players.values()) {
+    ctrl.destroy(reset);
+  }
+  players.clear();
+}
+
+function toggleVideo(postId) {
+  const ctrl = players.get(postId);
+  if (!ctrl) return;
+  ctrl.toggle();
+}
+
+/* =========================
+   Events
+========================= */
+function initEvents() {
+  const feed = el("feedContainer");
+  if (!feed) return;
+
+  feed.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    if (action === "noop") return;
+
+    const postId = btn.dataset.postId ? parseInt(btn.dataset.postId, 10) : null;
+    if (!postId) return;
+
+    if (action === "like") toggleLike(postId);
+    if (action === "dislike") toggleDislike(postId);
+    if (action === "toggle-video") toggleVideo(postId);
+  });
+}
+
+/* =========================
+   Particle background
+========================= */
 function initParticles() {
-  const canvas = document.getElementById('particleCanvas');
+  const canvas = document.getElementById("particleCanvas");
   if (!canvas) return;
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   let particles = [];
   let mouseX = 0, mouseY = 0;
 
-  const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+  const resize = () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  };
 
   const createParticles = () => {
     particles = [];
@@ -530,7 +1226,7 @@ function initParticles() {
         vx: (Math.random() - 0.5) * 0.4,
         vy: (Math.random() - 0.5) * 0.4,
         radius: Math.random() * 2 + 0.8,
-        opacity: Math.random() * 0.4 + 0.15
+        opacity: Math.random() * 0.4 + 0.15,
       });
     }
   };
@@ -539,21 +1235,27 @@ function initParticles() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     particles.forEach((p, i) => {
-      p.x += p.vx; p.y += p.vy;
+      p.x += p.vx;
+      p.y += p.vy;
       if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
       if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
 
-      const dx = mouseX - p.x, dy = mouseY - p.y;
+      const dx = mouseX - p.x;
+      const dy = mouseY - p.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < 150) { p.x -= dx * 0.008; p.y -= dy * 0.008; }
+      if (d < 150) {
+        p.x -= dx * 0.008;
+        p.y -= dy * 0.008;
+      }
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(99,102,241,${p.opacity})`;
       ctx.fill();
 
-      particles.slice(i + 1).forEach(o => {
-        const dx2 = p.x - o.x, dy2 = p.y - o.y;
+      particles.slice(i + 1).forEach((o) => {
+        const dx2 = p.x - o.x;
+        const dy2 = p.y - o.y;
         const d2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
         if (d2 < 100) {
           ctx.beginPath();
@@ -568,15 +1270,29 @@ function initParticles() {
     requestAnimationFrame(draw);
   };
 
-  resize(); createParticles(); draw();
-  window.addEventListener('resize', () => { resize(); createParticles(); });
-  window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+  resize();
+  createParticles();
+  draw();
+
+  window.addEventListener("resize", () => {
+    resize();
+    createParticles();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
 }
 
-// ===== Init =====
-document.addEventListener('DOMContentLoaded', () => {
+/* =========================
+   Init
+========================= */
+document.addEventListener("DOMContentLoaded", async () => {
   initParticles();
-  initPostStates();
-  renderFeed();
+  initSearch();
   initEvents();
+  initInfiniteScroll();
+
+  await loadMorePosts();
 });
