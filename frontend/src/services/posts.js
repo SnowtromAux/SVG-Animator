@@ -56,6 +56,27 @@ export async function getAllPostsRequest({ currentPostId } = {}) {
   return safeJsonFetch(url, { method: "GET" });
 }
 
+/**
+ * ✅ Моите постове
+ * GET http://localhost/svganimator/backend/api/posts/get-my-posts
+ *
+ * (ползваме API_BASE_URL, за да не hardcode-ваме host)
+ */
+export async function getMyPostsRequest({ currentPostId } = {}) {
+  const base = `${API_BASE_URL}/posts/get-my-posts`;
+
+  const hasParam =
+    currentPostId !== undefined &&
+    currentPostId !== null &&
+    String(currentPostId).trim() !== "";
+
+  const url = hasParam
+    ? `${base}?current_post_id=${encodeURIComponent(String(currentPostId))}`
+    : base;
+
+  return safeJsonFetch(url, { method: "GET" });
+}
+
 export async function createPostRequest({ animationId, description } = {}) {
   const url = `${API_BASE_URL}/posts/create-post`;
 
@@ -63,6 +84,24 @@ export async function createPostRequest({ animationId, description } = {}) {
     animation_id: String(animationId ?? ""),
     description: String(description ?? ""),
   };
+
+  return safeJsonFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * ✅ Delete post (ако имаш endpoint за това)
+ * Ако твоят backend е на друг път - смени го тук.
+ *
+ * Очаквано: POST/DELETE /posts/delete-post { post_id }
+ */
+export async function deleteMyPostRequest({ postId } = {}) {
+  const url = `${API_BASE_URL}/posts/delete-post`;
+
+  const payload = { post_id: String(postId ?? "") };
 
   return safeJsonFetch(url, {
     method: "POST",
