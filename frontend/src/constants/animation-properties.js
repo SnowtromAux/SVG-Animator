@@ -104,8 +104,6 @@ export const ANIMATION_PROPERTIES = {
       { name: 'fill', label: 'Fill', type: 'color' },
 
       { name: 'font-size', label: 'Font Size', type: 'number', step: 1, min: 1 }
-
-      // text-anchor е дискретно (start/middle/end) → махаме го
     ]
   },
 
