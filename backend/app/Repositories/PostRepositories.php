@@ -69,6 +69,8 @@ class PostRepositories
     {
         return DataBase::transaction($db, function () use ($db, $postId, $userId) {
 
+            $reaction = null;
+
             $sqlCheck = "
             SELECT id, type
             FROM reaction
@@ -80,24 +82,41 @@ class PostRepositories
             $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
 
             if ($row !== null) {
-                if ($row['type'] !== 'like') {
+                if ($row['type'] === 'like') {
+                    DataBase::exec(
+                        $db,
+                        "DELETE FROM reaction WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = null;
+                } else {
                     DataBase::exec(
                         $db,
                         "UPDATE reaction SET type = 'like' WHERE id = ?",
                         "i",
                         [(int)$row['id']]
                     );
+                    $reaction = 'like';
                 }
             } else {
                 DataBase::insert(
                     $db,
-                    "INSERT INTO reaction (post_id, user_id, type) VALUES (?, ?, 'like')",
+                    "INSERT INTO reaction (post_id, user_id, type)
+                 VALUES (?, ?, 'like')",
                     "ii",
                     [$postId, $userId]
                 );
+                $reaction = 'like';
             }
 
-            return self::getPostReactions($db, $postId);
+            $counts = self::getPostReactions($db, $postId);
+
+            return [
+                'reaction' => $reaction,
+                'likes'    => $counts['likes'],
+                'dislikes' => $counts['dislikes'],
+            ];
         });
     }
 
@@ -106,6 +125,8 @@ class PostRepositories
     {
         return DataBase::transaction($db, function () use ($db, $postId, $userId) {
 
+            $reaction = null;
+
             $sqlCheck = "
             SELECT id, type
             FROM reaction
@@ -117,26 +138,45 @@ class PostRepositories
             $row = DataBase::fetchRow($db, $sqlCheck, "ii", [$postId, $userId]);
 
             if ($row !== null) {
-                if ($row['type'] !== 'dislike') {
+                if ($row['type'] === 'dislike') {
+                    DataBase::exec(
+                        $db,
+                        "DELETE FROM reaction WHERE id = ?",
+                        "i",
+                        [(int)$row['id']]
+                    );
+                    $reaction = null;
+                } else {
                     DataBase::exec(
                         $db,
                         "UPDATE reaction SET type = 'dislike' WHERE id = ?",
                         "i",
                         [(int)$row['id']]
                     );
+                    $reaction = 'dislike';
                 }
             } else {
                 DataBase::insert(
                     $db,
-                    "INSERT INTO reaction (post_id, user_id, type) VALUES (?, ?, 'dislike')",
+                    "INSERT INTO reaction (post_id, user_id, type)
+                 VALUES (?, ?, 'dislike')",
                     "ii",
                     [$postId, $userId]
                 );
+                $reaction = 'dislike';
             }
 
-            return self::getPostReactions($db, $postId);
+            $counts = self::getPostReactions($db, $postId);
+
+            return [
+                'reaction' => $reaction,
+                'likes'    => $counts['likes'],
+                'dislikes' => $counts['dislikes'],
+            ];
         });
     }
+
+
 
 
     public static function getNextPosts(mysqli $db, ?int $currentPostId): array

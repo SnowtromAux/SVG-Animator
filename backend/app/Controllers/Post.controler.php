@@ -105,7 +105,6 @@ class PostController extends Controller
                 Response::success([
                     "message" => "поста беше харесан успешно",
                     "data" => $numLikesDislikes,
-                    "reactation" => "liked"
                 ], 200);
             }
         );
@@ -128,7 +127,6 @@ class PostController extends Controller
                 Response::success([
                     "message" => "поста беше нехаресан успешно",
                     "data" => $numLikesDislikes,
-                    "reactation" => "disliked"
                 ], 200);
             }
         );
@@ -161,7 +159,7 @@ class PostController extends Controller
         self::withDb(function ($conn) {
 
             $currentPostId = Request::param("current_post_id");
-            $userId = Session::user()["id"];
+            $userId = (int)Session::user()["id"];
             $nextPosts = PostRepositories::getPostsByUserId($conn, $currentPostId, $userId);
 
             foreach ($nextPosts as &$post) {
