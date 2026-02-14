@@ -1,1 +1,1 @@
-export const API_BASE_URL = "http://localhost/svganimator/backend/api";
+export const API_BASE_URL = "/svganimator/backend/api";

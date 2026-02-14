@@ -1,0 +1,25 @@
+services:
+  app:
+    container_name: svganimator-app
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+      args:
+        DB_SERVER: ${DB_SERVER}
+        DB_PORT: ${DB_PORT}
+        DB_NAME: ${DB_NAME}
+        DB_USER: ${DB_USER}
+        DB_PASSWORD: ${DB_PASSWORD}
+        BASE_PATH: ${BASE_PATH}
+        NUM_OF_ANIMATIONS_PER_PAGE: ${NUM_OF_ANIMATIONS_PER_PAGE}
+    ports:
+      - "8080:80"
+    environment:
+      DB_SERVER: ${DB_SERVER}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      BASE_PATH: ${BASE_PATH}
+      NUM_OF_ANIMATIONS_PER_PAGE: ${NUM_OF_ANIMATIONS_PER_PAGE}
+    restart: unless-stopped

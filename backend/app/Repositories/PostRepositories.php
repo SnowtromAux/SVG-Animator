@@ -191,7 +191,7 @@ class PostRepositories
                     dislikes_count,
                     created_at
                 FROM post
-                ORDER BY created_at ASC
+                ORDER BY created_at DESC
                 LIMIT 20";
 
             return DataBase::fetchAll($db, $sql);
